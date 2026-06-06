@@ -1,0 +1,24 @@
+name = "billiard-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Durable Objects: one Lobby (singleton) + per-match GameRoom.
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+# Free plan requires SQLite-backed Durable Objects.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Lobby", "GameRoom"]
+
+# Persistent stats store.
+# Create with: wrangler kv namespace create STATS  (then paste the id below)
+[[kv_namespaces]]
+binding = "STATS"
+id = "89b00488954c495e90e38376c3bdc031"

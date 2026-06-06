@@ -1,0 +1,42 @@
+@import '@rainbow-me/rainbowkit/styles.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+html,
+body {
+  background: #0b0e0f;
+  color: #e7eae8;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Felt-table backdrop accent */
+body {
+  background-image: radial-gradient(
+      1200px 600px at 50% -10%,
+      rgba(21, 92, 70, 0.25),
+      transparent 60%
+    ),
+    radial-gradient(800px 400px at 100% 100%, rgba(217, 164, 65, 0.06), transparent 55%);
+  background-attachment: fixed;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Hide scrollbars on the canvas screen but keep scrollability */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
