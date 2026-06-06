@@ -200,7 +200,7 @@ export function PoolCanvas({
         ref={canvasRef}
         width={900}
         height={450}
-        className="w-full touch-none rounded-2xl border border-charcoal-line bg-felt shadow-felt"
+        className="w-full touch-none rounded-2xl border border-ink-line bg-felt shadow-felt"
         style={{ aspectRatio: `${TABLE.width} / ${TABLE.height}` }}
       />
       {/* Spin selector */}
@@ -234,7 +234,7 @@ function SpinPad({
         const y = ((e.clientY - rect.top) / rect.height) * 2 - 1;
         onChange({ x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) });
       }}
-      className="relative h-9 w-9 rounded-full border border-charcoal-line bg-[#0e1213] disabled:opacity-40"
+      className="relative h-9 w-9 rounded-full border border-ink-line bg-[#0e1213] disabled:opacity-40"
       aria-label="spin selector"
     >
       <span

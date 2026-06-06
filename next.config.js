@@ -9,6 +9,11 @@ const nextConfig = {
     unoptimized: true,
   },
   reactStrictMode: true,
+  webpack: (config) => {
+    // XMTP browser-sdk (@xmtp/wasm-bindings) ships WebAssembly + top-level await.
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
+    return config;
+  },
 };
 
 module.exports = nextConfig;

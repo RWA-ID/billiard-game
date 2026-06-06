@@ -31,7 +31,7 @@ export function EnsPrompt({
   };
 
   return (
-    <div className="flex flex-col items-start gap-3 rounded-xl border border-brass/25 bg-charcoal-card/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col items-start gap-3 rounded-xl border border-brass/25 bg-ink-card/70 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="font-display text-sm font-600 text-zinc-100">
           Players with an ENS name are easier to find and recognize.

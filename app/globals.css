@@ -7,29 +7,49 @@
 :root {
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
 }
 
 html,
 body {
-  background: #0b0e0f;
-  color: #e7eae8;
+  background: #0a0f0d;
+  color: #d8e0da;
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Felt-table backdrop accent */
+/* Felt-hall backdrop: a warm overhead lamp glow + green floor bounce. */
 body {
   background-image: radial-gradient(
-      1200px 600px at 50% -10%,
-      rgba(21, 92, 70, 0.25),
-      transparent 60%
+      900px 520px at 78% -8%,
+      rgba(28, 107, 79, 0.30),
+      transparent 62%
     ),
-    radial-gradient(800px 400px at 100% 100%, rgba(217, 164, 65, 0.06), transparent 55%);
+    radial-gradient(700px 500px at 8% 12%, rgba(217, 164, 65, 0.05), transparent 60%),
+    radial-gradient(1000px 700px at 50% 120%, rgba(13, 59, 46, 0.35), transparent 60%);
   background-attachment: fixed;
 }
 
 .font-display {
   font-family: var(--font-display);
+}
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Soft entrance for sections */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Hide scrollbars on the canvas screen but keep scrollability */

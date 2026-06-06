@@ -149,7 +149,7 @@ export default function PlayPage() {
         )}
 
         {over && (
-          <div className="mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-charcoal-card/70 p-8 text-center shadow-brass">
+          <div className="mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-ink-card/70 p-8 text-center shadow-brass">
             <p className="font-display text-2xl font-700 text-zinc-50">
               {hotSeat
                 ? `Player ${(match!.turn.winner ?? 0) + 1} wins`

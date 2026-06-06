@@ -20,7 +20,7 @@ export function Lobby({
   onChallenge: (address: `0x${string}`) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-charcoal-line bg-charcoal-card/50 p-5">
+    <section className="rounded-2xl border border-ink-line bg-ink-card/50 p-5">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-700 text-zinc-100">Lobby</h2>
         <span className="flex items-center gap-2 text-xs text-zinc-500">
@@ -33,7 +33,7 @@ export function Lobby({
         </span>
       </div>
 
-      <ul className="mt-4 divide-y divide-charcoal-line/60">
+      <ul className="mt-4 divide-y divide-ink-line/60">
         {players.length === 0 && (
           <li className="py-8 text-center text-sm text-zinc-500">
             {connected ? 'No one else here yet — invite a friend to billiard.eth.' : 'Connecting to lobby…'}

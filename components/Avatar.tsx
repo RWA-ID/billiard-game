@@ -43,7 +43,7 @@ export function Avatar({
       alt={alt}
       width={size}
       height={size}
-      className="rounded-full ring-1 ring-white/10 object-cover bg-charcoal-card"
+      className="rounded-full ring-1 ring-white/10 object-cover bg-ink-card"
       style={{ width: size, height: size }}
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).src = fallback;

@@ -149,3 +149,4 @@ worker/.wrangler/
 
 # Next.js generated types
 next-env.d.ts
+tsconfig.tsbuildinfo

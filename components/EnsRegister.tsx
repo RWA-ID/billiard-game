@@ -168,7 +168,7 @@ export function EnsRegister({ onDone }: { onDone?: (name: string) => void }) {
   const busy = step !== 'idle' && step !== 'done';
 
   return (
-    <div className="rounded-2xl border border-charcoal-line bg-charcoal-card/60 p-5">
+    <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-5">
       <h3 className="font-display text-lg font-700 text-zinc-100">Register an ENS name</h3>
       <p className="mt-1 text-sm text-zinc-400">
         Optional. A real second-level <span className="text-brass-light">.eth</span> name via the
@@ -176,7 +176,7 @@ export function EnsRegister({ onDone }: { onDone?: (name: string) => void }) {
       </p>
 
       {/* Label input */}
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-charcoal-line bg-[#0e1213] px-3 py-2">
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2">
         <input
           value={label}
           disabled={busy}

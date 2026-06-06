@@ -20,7 +20,7 @@ export function ChallengeModal({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-brass/30 bg-charcoal-card p-6 shadow-brass">
+      <div className="w-full max-w-sm rounded-2xl border border-brass/30 bg-ink-card p-6 shadow-brass">
         <div className="flex items-center gap-3">
           <Avatar address={from} size={44} />
           <div>
