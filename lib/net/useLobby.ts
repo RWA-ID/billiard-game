@@ -91,6 +91,18 @@ export function useLobby(identity: Identity | null) {
     };
   }, [address]);
 
+  // Re-broadcast presence when ENS resolves AFTER connecting (the socket no
+  // longer reconnects on identity change), so other players see the name/avatar
+  // instead of a hex address. Queued if the socket isn't open yet.
+  useEffect(() => {
+    const id = idRef.current;
+    if (!id || !chan.current) return;
+    chan.current.send({
+      t: 'hello',
+      player: { address: id.address, ensName: id.ensName, avatar: id.avatar },
+    });
+  }, [identity?.ensName, identity?.avatar]);
+
   const challenge = useCallback(
     async (opponent: Address) => {
       if (!identity || !chan.current) return;

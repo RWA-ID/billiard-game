@@ -22,6 +22,40 @@ export function nodeOf(name: string): Hex {
   return namehash(name);
 }
 
+/**
+ * Best-effort list of `.eth` names a wallet owns, via the ENS subgraph. The
+ * `.eth` registrar isn't enumerable on-chain, so this is the only way to list
+ * names — but it's an external (deprecated-but-live) endpoint, so it fails soft
+ * to an empty array. Callers should merge in the known primary + any name just
+ * registered this session.
+ */
+const ENS_SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/ensdomains/ens';
+
+export async function listOwnedNames(address: Address): Promise<string[]> {
+  const a = address.toLowerCase();
+  const query = `query($a: String!) {
+    domains(first: 200, where: { owner: $a }) { name }
+    registrations(first: 200, where: { registrant: $a }) { domain { name } }
+  }`;
+  try {
+    const res = await fetch(ENS_SUBGRAPH, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query, variables: { a } }),
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const names = new Set<string>();
+    for (const d of json?.data?.domains ?? []) if (d?.name) names.add(d.name);
+    for (const r of json?.data?.registrations ?? []) if (r?.domain?.name) names.add(r.domain.name);
+    return [...names]
+      .filter((n) => n.endsWith('.eth') && !n.includes('[') && n.split('.').length === 2)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 /** The resolver currently set for a name (zero address if none). */
 export async function getResolver(name: string): Promise<Address> {
   return ensClient.readContract({

@@ -1,8 +1,7 @@
 'use client';
 
 import type { PlayerInfo } from '@/lib/net/protocol';
-import { truncate } from '@/lib/ens/resolve';
-import { Avatar } from './Avatar';
+import { PlayerIdentity } from './PlayerIdentity';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Spinner } from './ui/Spinner';
@@ -43,17 +42,13 @@ export function Lobby({
           const isPending = outgoing?.toLowerCase() === p.address.toLowerCase();
           return (
             <li key={p.address} className="flex items-center justify-between gap-3 py-3">
-              <div className="flex items-center gap-3">
-                <Avatar address={p.address} avatar={p.avatar} size={36} />
-                <div>
-                  <p className="text-sm font-medium text-zinc-100">
-                    {p.ensName ?? truncate(p.address)}
-                  </p>
-                  {p.ensName && (
-                    <p className="font-mono text-xs text-zinc-500">{truncate(p.address)}</p>
-                  )}
-                </div>
-              </div>
+              <PlayerIdentity
+                address={p.address}
+                ensName={p.ensName}
+                avatar={p.avatar}
+                size={36}
+                nameClassName="text-sm font-medium text-zinc-100"
+              />
               {isPending ? (
                 <Badge tone="loading">
                   <Spinner size={11} /> waiting…

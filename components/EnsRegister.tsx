@@ -39,9 +39,11 @@ const LABEL_KEY = 'billiard.ensRegister.label';
 export function EnsRegister({
   onDone,
   bare = false,
+  compact = false,
 }: {
   onDone?: (name: string) => void;
   bare?: boolean;
+  compact?: boolean;
 }) {
   const { address } = useAccount();
   const chainId = useChainId();
@@ -175,14 +177,21 @@ export function EnsRegister({
 
   const inner = (
     <>
-      <h3 className="font-display text-lg font-700 text-zinc-100">Register an ENS name</h3>
-      <p className="mt-1 text-sm text-zinc-400">
-        Optional. A real second-level <span className="text-brass-light">.eth</span> name via the
-        official ENS registrar — two transactions (commit → reveal), you pay gas + the name fee.
-      </p>
+      {!compact && (
+        <>
+          <h3 className="font-display text-lg font-700 text-zinc-100">Register an ENS name</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Optional. A real second-level <span className="text-brass-light">.eth</span> name via
+            the official ENS registrar — two transactions (commit → reveal), you pay gas + the name
+            fee.
+          </p>
+        </>
+      )}
 
       {/* Label input */}
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2">
+      <div
+        className={`${compact ? 'mt-0' : 'mt-4'} flex items-center gap-2 rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2`}
+      >
         <input
           value={label}
           disabled={busy}

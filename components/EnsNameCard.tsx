@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAccount, useChainId, useSwitchChain, useWriteContract } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { mainnet } from 'wagmi/chains';
@@ -17,6 +17,7 @@ import {
   buildRecordCalls,
   getResolver,
   isZeroResolver,
+  listOwnedNames,
   nodeOf,
   readProfile,
   type ProfileRecords,
@@ -29,43 +30,95 @@ import { Spinner } from './ui/Spinner';
 import { Badge } from './ui/Badge';
 
 /**
- * Always-visible ENS identity card: register a `.eth` name, then set its avatar
- * + text records and make it your primary name. Registration and profile edits
- * are independent on-chain steps — a failed edit never affects ownership.
+ * Compact ENS identity card. Register a `.eth` name, or pick a name you already
+ * own to update its avatar/records and primary status. The profile editor only
+ * appears after registering a NEW name or explicitly choosing one to update —
+ * it's never auto-shown for an existing name.
  */
 export function EnsNameCard() {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const { identity } = useIdentity();
-  const [registeredName, setRegisteredName] = useState<string | null>(null);
+  const [registered, setRegistered] = useState<string[]>([]);
+  const [owned, setOwned] = useState<string[]>([]);
+  const [selected, setSelected] = useState('');
 
-  // The name to manage: one just registered here, else the current primary.
-  const manageName = registeredName ?? identity?.ensName ?? null;
+  // Names the wallet owns (subgraph, best-effort) + the known primary.
+  useEffect(() => {
+    if (!address) {
+      setOwned([]);
+      return;
+    }
+    let cancelled = false;
+    listOwnedNames(address)
+      .then((ns) => {
+        if (!cancelled) setOwned(ns);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+
+  const names = useMemo(() => {
+    const set = new Set<string>();
+    if (identity?.ensName) set.add(identity.ensName);
+    registered.forEach((n) => set.add(n));
+    owned.forEach((n) => set.add(n));
+    return [...set].sort();
+  }, [identity?.ensName, registered, owned]);
+
+  const onRegistered = (name: string) => {
+    setRegistered((r) => (r.includes(name) ? r : [...r, name]));
+    setSelected(name); // open the editor for the freshly registered name
+  };
 
   return (
-    <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-5 shadow-card">
+    <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-4 shadow-card">
       {!isConnected ? (
-        <div className="text-center">
-          <h3 className="font-display text-lg font-700 text-zinc-100">Get your ENS identity</h3>
-          <p className="mx-auto mt-1 max-w-md text-sm text-zinc-400">
-            Connect a wallet to register a <span className="text-brass-light">.eth</span> name, set
-            an avatar and bio, and make it your primary name across billiard.eth.
+        <div className="flex flex-col items-center gap-3 py-1 text-center sm:flex-row sm:justify-between sm:text-left">
+          <p className="text-sm text-zinc-400">
+            <span className="font-600 text-zinc-200">Get an ENS name</span> — connect your wallet to
+            register one and stand out on the leaderboard.
           </p>
-          <div className="mt-4 inline-block">
-            <ConnectWallet />
-          </div>
+          <ConnectWallet />
         </div>
       ) : (
-        <div className="space-y-5">
-          <EnsRegister bare onDone={(n) => setRegisteredName(n)} />
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-400">
+            <span className="font-600 text-zinc-200">Don&apos;t have an ENS?</span> Register one
+            below for better discoverability.
+          </p>
 
-          <div className="border-t border-ink-line/60" />
+          <EnsRegister bare compact onDone={onRegistered} />
 
-          {manageName ? (
-            <EnsProfileEditor name={manageName} isPrimary={identity?.ensName === manageName} />
-          ) : (
-            <p className="text-sm text-zinc-500">
-              Once you own a name, set your avatar, bio, and primary name here.
-            </p>
+          {names.length > 0 && (
+            <div className="border-t border-ink-line/60 pt-3">
+              <label className="mb-1.5 block text-xs uppercase tracking-wide text-zinc-500">
+                Have a name? Choose one to update
+              </label>
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                className="w-full rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sage/40"
+              >
+                <option value="">Choose a name…</option>
+                {names.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                    {identity?.ensName === n ? '  (primary)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {selected && (
+            <EnsProfileEditor
+              key={selected}
+              name={selected}
+              isPrimary={identity?.ensName === selected}
+              onClose={() => setSelected('')}
+            />
           )}
         </div>
       )}
@@ -73,8 +126,16 @@ export function EnsNameCard() {
   );
 }
 
-// ── Profile editor ──────────────────────────────────────────────────────────
-function EnsProfileEditor({ name, isPrimary }: { name: string; isPrimary: boolean }) {
+// ── Profile editor (only rendered when a name is selected) ──────────────────
+function EnsProfileEditor({
+  name,
+  isPrimary,
+  onClose,
+}: {
+  name: string;
+  isPrimary: boolean;
+  onClose: () => void;
+}) {
   const { address } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
@@ -93,7 +154,6 @@ function EnsProfileEditor({ name, isPrimary }: { name: string; isPrimary: boolea
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setPrimarySet(isPrimary);
     readProfile(name)
       .then((r) => {
         if (!cancelled) setRecords(r);
@@ -105,10 +165,9 @@ function EnsProfileEditor({ name, isPrimary }: { name: string; isPrimary: boolea
     return () => {
       cancelled = true;
     };
-  }, [name, isPrimary]);
+  }, [name]);
 
-  const setField = (key: string, value: string) =>
-    setRecords((r) => ({ ...r, [key]: value }));
+  const setField = (key: string, value: string) => setRecords((r) => ({ ...r, [key]: value }));
 
   async function saveProfile() {
     setError(null);
@@ -118,7 +177,6 @@ function EnsProfileEditor({ name, isPrimary }: { name: string; isPrimary: boolea
 
     setSaving(true);
     try {
-      // Make sure the name has a resolver we can write to.
       let resolver = await getResolver(name);
       if (isZeroResolver(resolver)) {
         const h = await writeContractAsync({
@@ -130,7 +188,6 @@ function EnsProfileEditor({ name, isPrimary }: { name: string; isPrimary: boolea
         await waitForTransactionReceipt(config, { hash: h });
         resolver = ENS.publicResolver;
       }
-
       const calls = buildRecordCalls(name, address, records, { setAddr: true });
       if (!calls) {
         setMsg('Nothing to save — add an avatar or bio first.');
@@ -179,90 +236,82 @@ function EnsProfileEditor({ name, isPrimary }: { name: string; isPrimary: boolea
   const avatarPreview = toHttp(records.avatar);
 
   return (
-    <div>
+    <div className="rounded-xl border border-ink-line/70 bg-[#0e1213]/40 p-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-lg font-700 text-zinc-100">Set up {name}</h3>
-        {primarySet ? (
-          <Badge tone="available">primary</Badge>
-        ) : (
-          <Badge tone="neutral">not primary</Badge>
-        )}
+        <div className="flex items-center gap-2.5">
+          <Avatar address={address ?? name} avatar={avatarPreview} size={36} />
+          <div>
+            <p className="font-display text-sm font-700 text-zinc-100">{name}</p>
+            <span className="text-[11px] text-zinc-500">
+              {primarySet ? 'your primary name' : 'not your primary name'}
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-xs text-zinc-500 hover:text-zinc-300"
+          aria-label="Close editor"
+        >
+          ✕
+        </button>
       </div>
-      <p className="mt-1 text-sm text-zinc-400">
-        Add an avatar and records, and set this as your primary name. Each is a single on-chain
-        transaction.
-      </p>
 
       {loading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-zinc-500">
-          <Spinner size={14} /> Loading current records…
+        <div className="mt-3 flex items-center gap-2 text-sm text-zinc-500">
+          <Spinner size={13} /> Loading records…
         </div>
       ) : (
         <>
-          <div className="mt-4 flex items-center gap-3">
-            <Avatar address={address ?? name} avatar={avatarPreview} size={48} />
-            <span className="text-xs text-zinc-500">Avatar preview</span>
-          </div>
-
-          <div className="mt-4 grid gap-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {PROFILE_FIELDS.map((f) => (
-              <label key={f.key} className="block">
-                <span className="mb-1 block text-xs uppercase tracking-wide text-zinc-500">
+              <label key={f.key} className={f.key === 'description' ? 'sm:col-span-2' : ''}>
+                <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">
                   {f.label}
                 </span>
-                {f.key === 'description' ? (
-                  <textarea
-                    value={records[f.key] ?? ''}
-                    onChange={(e) => setField(f.key, e.target.value)}
-                    placeholder={f.placeholder}
-                    rows={2}
-                    className="w-full resize-none rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2 text-sm outline-none placeholder:text-zinc-600 focus:border-sage/40"
-                  />
-                ) : (
-                  <input
-                    value={records[f.key] ?? ''}
-                    onChange={(e) => setField(f.key, e.target.value)}
-                    placeholder={f.placeholder}
-                    className="w-full rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2 text-sm outline-none placeholder:text-zinc-600 focus:border-sage/40"
-                  />
-                )}
+                <input
+                  value={records[f.key] ?? ''}
+                  onChange={(e) => setField(f.key, e.target.value)}
+                  placeholder={f.placeholder}
+                  className="w-full rounded-lg border border-ink-line bg-[#0e1213] px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-sage/40"
+                />
               </label>
             ))}
           </div>
 
           {!onMainnet && (
-            <p className="mt-3 text-sm text-amber-400">
-              Switch to Ethereum mainnet to edit records.{' '}
+            <p className="mt-2 text-xs text-amber-400">
+              Switch to Ethereum mainnet to edit.{' '}
               <button className="underline" onClick={() => switchChain?.({ chainId: mainnet.id })}>
                 Switch
               </button>
             </p>
           )}
+          {msg && <p className="mt-2 text-xs text-sage-bright">{msg}</p>}
+          {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
 
-          {msg && <p className="mt-3 text-sm text-sage-bright">{msg}</p>}
-          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button onClick={saveProfile} disabled={saving || primaryBusy}>
               {saving ? (
                 <>
-                  <Spinner size={14} /> Saving…
+                  <Spinner size={13} /> Saving…
                 </>
               ) : (
                 'Save profile'
               )}
             </Button>
-            <Button variant="secondary" onClick={setPrimary} disabled={primaryBusy || saving || primarySet}>
-              {primaryBusy ? (
-                <>
-                  <Spinner size={14} /> Setting…
-                </>
-              ) : primarySet ? (
-                'Primary set ✓'
-              ) : (
-                'Set as primary'
-              )}
-            </Button>
+            {primarySet ? (
+              <Badge tone="available">primary ✓</Badge>
+            ) : (
+              <Button variant="secondary" onClick={setPrimary} disabled={primaryBusy || saving}>
+                {primaryBusy ? (
+                  <>
+                    <Spinner size={13} /> Setting…
+                  </>
+                ) : (
+                  'Set as primary'
+                )}
+              </Button>
+            )}
           </div>
         </>
       )}
