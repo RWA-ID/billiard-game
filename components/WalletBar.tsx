@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useIdentity } from '@/lib/wallet/useIdentity';
 import { Avatar } from './Avatar';
+import { ConnectWallet } from './ConnectWallet';
 
 /**
- * Top bar: brand + RainbowKit connect button + ENS identity display.
+ * Top bar: brand + Reown AppKit connect button + ENS identity display.
  * Guests (no ENS) get a subtle "Get an ENS name" link instead of a nag.
  */
 export function WalletBar() {
@@ -47,11 +47,7 @@ export function WalletBar() {
           <Link href="/stats" className="text-sm text-zinc-400 hover:text-zinc-100">
             Leaderboard
           </Link>
-          <ConnectButton
-            accountStatus="avatar"
-            chainStatus="none"
-            showBalance={false}
-          />
+          <ConnectWallet />
         </div>
       </div>
     </header>

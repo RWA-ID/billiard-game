@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useAccount, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
+import { useAppKit } from '@reown/appkit/react';
 import { parseEther, type Address } from 'viem';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Button } from './ui/Button';
 import { Spinner } from './ui/Spinner';
 
@@ -14,7 +14,19 @@ const PRESETS = ['0.005', '0.01', '0.05'];
 
 export function DonateCard() {
   const { isConnected } = useAccount();
+  const { open } = useAppKit();
   const [amount, setAmount] = useState('0.01');
+  const [copied, setCopied] = useState(false);
+
+  const copyAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(DONATE_TO);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
   const { data: hash, sendTransaction, isPending, error, reset } = useSendTransaction();
   const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
@@ -74,11 +86,7 @@ export function DonateCard() {
 
           <div className="mt-4">
             {!isConnected ? (
-              <ConnectButton.Custom>
-                {({ openConnectModal }) => (
-                  <Button onClick={openConnectModal}>Connect to donate</Button>
-                )}
-              </ConnectButton.Custom>
+              <Button onClick={() => open()}>Connect to donate</Button>
             ) : (
               <Button onClick={donate} disabled={isPending || confirming || !Number(amount)}>
                 {isPending || confirming ? (
@@ -90,6 +98,20 @@ export function DonateCard() {
                 )}
               </Button>
             )}
+          </div>
+
+          {/* No wallet? Just copy the address and send from anywhere. */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-line/60 pt-4">
+            <span className="text-xs text-zinc-500">No wallet handy? Send to</span>
+            <code className="rounded-md border border-ink-line bg-[#0e1512] px-2 py-1 font-mono text-xs text-zinc-300">
+              {DONATE_TO.slice(0, 6)}…{DONATE_TO.slice(-4)}
+            </code>
+            <button
+              onClick={copyAddress}
+              className="inline-flex items-center gap-1.5 rounded-md border border-sage/40 px-2.5 py-1 text-xs font-500 text-sage-bright transition hover:bg-sage/10"
+            >
+              {copied ? 'Copied ✓' : 'Copy address'}
+            </button>
           </div>
 
           {error && (

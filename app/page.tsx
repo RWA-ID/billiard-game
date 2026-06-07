@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { HeroTable } from '@/components/HeroTable';
+import { useAppKit } from '@reown/appkit/react';
+import { ConnectWallet } from '@/components/ConnectWallet';
 import { Lobby } from '@/components/Lobby';
 import { EnsPrompt } from '@/components/EnsPrompt';
 import { EnsRegister } from '@/components/EnsRegister';
@@ -53,7 +53,7 @@ export default function Home() {
             <br />
             Real Competition.
             <br />
-            <span className="text-sage-bright">Onchain Identity.</span>
+            <span className="text-sage-bright">Built On Reputation.</span>
           </h1>
           <p className="mt-6 max-w-md text-[15px] leading-relaxed text-zinc-400">
             billiard.eth is a multiplayer 8-ball game where your ENS name is your identity.
@@ -81,11 +81,16 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Table illustration */}
+        {/* Table photo */}
         <div className="relative h-[300px] sm:h-[380px] lg:h-[520px]">
           <OnlinePill connected={connected} count={players.length} players={players} />
-          <div className="absolute inset-0 animate-floaty">
-            <HeroTable />
+          <div className="absolute inset-0 animate-floaty overflow-hidden rounded-3xl border border-ink-line/80 shadow-2xl ring-1 ring-sage/10">
+            <img
+              src="/hero-table.jpg"
+              alt="A felt pool table racked and waiting in a dim bar"
+              className="h-full w-full object-cover"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent to-transparent" />
           </div>
         </div>
       </section>
@@ -152,7 +157,7 @@ export default function Home() {
             <div className="text-center">
               <p className="mb-4 text-zinc-300">Connect to play, challenge, and rank.</p>
               <div className="inline-block">
-                <ConnectButton chainStatus="none" showBalance={false} />
+                <ConnectWallet />
               </div>
             </div>
           </div>
@@ -178,7 +183,7 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-5 pb-12">
         <div className="flex flex-col items-start justify-between gap-6 rounded-2xl border border-ink-line bg-gradient-to-br from-ink-card to-ink-soft p-7 sm:flex-row sm:items-center">
           <div className="flex items-center gap-4">
-            <EnsMark size={44} />
+            <EnsLogo size={44} />
             <div>
               <h4 className="font-serif text-xl font-700 text-cream">Powered by ENS</h4>
               <p className="mt-1 text-sm text-zinc-400">
@@ -243,22 +248,17 @@ function SiteHeader({ onPlay }: { onPlay: () => void }) {
 }
 
 function ConnectEnsButton() {
+  const { open } = useAppKit();
+  const { isConnected } = useAccount();
+  const { identity } = useIdentity();
   return (
-    <ConnectButton.Custom>
-      {({ account, chain, mounted, openConnectModal, openAccountModal }) => {
-        const ready = mounted;
-        const isConnected = ready && account && chain;
-        return (
-          <button
-            onClick={isConnected ? openAccountModal : openConnectModal}
-            className="inline-flex items-center gap-2 rounded-xl border border-sage/40 bg-sage/5 px-4 py-2.5 text-sm font-600 text-sage-bright transition hover:bg-sage/10"
-          >
-            <EnsMark size={16} />
-            {isConnected ? account!.displayName : 'Connect ENS'}
-          </button>
-        );
-      }}
-    </ConnectButton.Custom>
+    <button
+      onClick={() => open()}
+      className="inline-flex items-center gap-2 rounded-xl border border-sage/40 bg-sage/5 px-4 py-2.5 text-sm font-600 text-sage-bright transition hover:bg-sage/10"
+    >
+      <EnsLogo size={16} />
+      {isConnected && identity ? identity.display : 'Connect ENS'}
+    </button>
   );
 }
 
@@ -329,32 +329,16 @@ function AnywherePromo() {
         Jump in from any device. No downloads. No friction. Just pure pool.
       </p>
 
-      {/* phone w/ mini table */}
-      <div className="mt-6 flex justify-end">
-        <div className="w-40 rotate-6 rounded-[1.2rem] border-4 border-[#2a2a2a] bg-black p-1.5 shadow-2xl">
-          <div className="rounded-[0.8rem] bg-felt p-2">
-            <div className="grid grid-cols-5 gap-1">
-              {[1, 9, 2, 8, 3, 10, 4, 11, 5, 12].map((n) => (
-                <span
-                  key={n}
-                  className="aspect-square rounded-full"
-                  style={{ background: miniBall(n) }}
-                />
-              ))}
-            </div>
-            <span className="mx-auto mt-2 block h-2.5 w-2.5 rounded-full bg-white/90" />
-          </div>
-        </div>
+      {/* top-down table photo */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-ink-line/80 shadow-2xl ring-1 ring-sage/10">
+        <img
+          src="/anywhere-table.jpg"
+          alt="A racked pool table seen from above"
+          className="h-44 w-full object-cover"
+        />
       </div>
     </div>
   );
-}
-
-function miniBall(n: number): string {
-  if (n === 8) return '#15161a';
-  const stripe = n >= 9;
-  const c = ['#e8b21e', '#1f50c8', '#cf2027', '#5e2a8c', '#df6a1e'][(n - 1) % 5];
-  return stripe ? `linear-gradient(#efeadb 30%, ${c} 30% 70%, #efeadb 70%)` : c;
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────
@@ -393,6 +377,22 @@ function EnsMark({ size = 18 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M5 13.5 11.5 3v7L5 13.5Z" fill="#6fd089" />
       <path d="M19 10.5 12.5 21v-7L19 10.5Z" fill="#4f88c7" />
+    </svg>
+  );
+}
+// Official-style ENS mark: blue rounded square with the white twist glyph.
+function EnsLogo({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 96 96" fill="none" aria-hidden>
+      <rect width="96" height="96" rx="22" fill="#3a8ec9" />
+      <g fill="#fff">
+        <path d="M48 10C40 22 28 34 18 48C30 42 40 38 44 33C45 25 46 17 48 10Z" />
+        <path d="M48 10C52 24 60 34 80 52C66 50 56 46 50 38C47 30 47 19 48 10Z" />
+      </g>
+      <g fill="#fff" transform="rotate(180 48 48)">
+        <path d="M48 10C40 22 28 34 18 48C30 42 40 38 44 33C45 25 46 17 48 10Z" />
+        <path d="M48 10C52 24 60 34 80 52C66 50 56 46 50 38C47 30 47 19 48 10Z" />
+      </g>
     </svg>
   );
 }

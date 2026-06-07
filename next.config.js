@@ -12,6 +12,9 @@ const nextConfig = {
   webpack: (config) => {
     // XMTP browser-sdk (@xmtp/wasm-bindings) ships WebAssembly + top-level await.
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
+    // WalletConnect's pino logger optionally requires pino-pretty (dev only);
+    // it's not installed and not needed in the browser bundle — stub it out.
+    config.resolve.alias = { ...config.resolve.alias, 'pino-pretty': false };
     return config;
   },
 };

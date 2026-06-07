@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import type { Address } from 'viem';
 import { WalletBar } from '@/components/WalletBar';
+import { ConnectWallet } from '@/components/ConnectWallet';
 import { Avatar } from '@/components/Avatar';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +14,13 @@ import { useIdentity } from '@/lib/wallet/useIdentity';
 import { useLobby } from '@/lib/net/useLobby';
 import { useXmtp } from '@/lib/xmtp/useXmtp';
 import { fetchStats } from '@/lib/net/socket';
-import { resolveIdentity, truncate, type Identity } from '@/lib/ens/resolve';
+import {
+  resolveIdentity,
+  resolveEnsRecords,
+  truncate,
+  type Identity,
+  type EnsRecords,
+} from '@/lib/ens/resolve';
 import type { PlayerInfo } from '@/lib/net/protocol';
 
 type PlayerStats = {
@@ -33,6 +39,7 @@ export default function ProfilePage() {
 
   // Optionally view another player's profile via ?address=
   const [viewed, setViewed] = useState<Identity | null>(null);
+  const [records, setRecords] = useState<EnsRecords | null>(null);
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [peer, setPeer] = useState<PlayerInfo | null>(null);
@@ -48,6 +55,22 @@ export default function ProfilePage() {
 
   // Default the viewed identity to the connected user.
   const profile = viewed ?? me;
+
+  // Pull ENS text records (bio + links) once a primary name is known.
+  useEffect(() => {
+    setRecords(null);
+    const name = profile?.ensName;
+    if (!name) return;
+    let cancelled = false;
+    resolveEnsRecords(name)
+      .then((r) => {
+        if (!cancelled) setRecords(r);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.ensName]);
 
   useEffect(() => {
     if (!targetAddress) return;
@@ -74,7 +97,7 @@ export default function ProfilePage() {
           <h1 className="font-serif text-3xl font-700 text-cream">Your profile</h1>
           <p className="mt-2 text-sm text-zinc-400">Connect a wallet to see your stats and chat with players.</p>
           <div className="mt-6">
-            <ConnectButton chainStatus="none" showBalance={false} />
+            <ConnectWallet />
           </div>
         </div>
       </main>
@@ -97,7 +120,12 @@ export default function ProfilePage() {
                     {profile.ensName ?? truncate(profile.address)}
                   </h1>
                   <p className="font-mono text-xs text-zinc-500">{profile.address}</p>
-                  <div className="mt-2 flex gap-2">
+                  {records?.description && (
+                    <p className="mt-2 max-w-prose text-sm leading-relaxed text-zinc-300">
+                      {records.description}
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     {profile.ensName ? (
                       <a
                         href={`https://app.ens.domains/${profile.ensName}`}
@@ -110,6 +138,26 @@ export default function ProfilePage() {
                     ) : (
                       <a href="/?register=1" className="text-xs text-sage-bright hover:underline">
                         Get an ENS name
+                      </a>
+                    )}
+                    {records?.url && (
+                      <a
+                        href={records.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-zinc-400 hover:text-sage-bright hover:underline"
+                      >
+                        Website ↗
+                      </a>
+                    )}
+                    {records?.twitter && (
+                      <a
+                        href={`https://x.com/${records.twitter.replace(/^@/, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-zinc-400 hover:text-sage-bright hover:underline"
+                      >
+                        @{records.twitter.replace(/^@/, '')}
                       </a>
                     )}
                     {viewed && (
