@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignMessage } from 'wagmi';
 import { WalletBar } from '@/components/WalletBar';
@@ -14,7 +14,7 @@ import { applyShot, newMatch, type Match } from '@/lib/game/state';
 import { hashState, type ShotInput } from '@/lib/game/physics';
 import { resultMessage } from '@/lib/crypto/sign';
 import { useEnsProfile } from '@/lib/ens/useEnsProfile';
-import type { Matched, ResultPayload } from '@/lib/net/protocol';
+import type { Matched, ResultPayload, RoomServerMsg } from '@/lib/net/protocol';
 
 /**
  * Match screen. Reads the matched context stashed by the lobby. Maintains a
@@ -33,9 +33,12 @@ export default function PlayPage() {
   const [opponentLeft, setOpponentLeft] = useState(false);
   const [started, setStarted] = useState(false);
 
-  const { connected, last, sendShot, sendStateHash, sendSignedResult, resign } = useRoom(
+  // Latest message handler, read from a ref so useRoom never re-subscribes.
+  const handlerRef = useRef<(msg: RoomServerMsg) => void>(() => {});
+  const { connected, sendShot, sendStateHash, sendSignedResult, resign } = useRoom(
     identity,
     ctx,
+    (msg) => handlerRef.current(msg),
   );
 
   // Load the match context the lobby stashed (or fall back to local hot-seat).
@@ -77,32 +80,32 @@ export default function PlayPage() {
     router.push('/');
   }
 
-  // Reconcile to the DO's authoritative match (board + turn) when it resolves.
-  useEffect(() => {
-    if (!last) return;
-    if (last.t === 'start') {
+  // Reconcile to the DO's authoritative messages. Assigned every render so the
+  // closure sees the latest identity/myIndex; useRoom calls it via handlerRef.
+  handlerRef.current = (msg: RoomServerMsg) => {
+    if (msg.t === 'start') {
       // Both players are in the room; the DO has racked. Enable input.
       setStarted(true);
-    } else if (last.t === 'resolved') {
+    } else if (msg.t === 'resolved') {
       // The DO ran the canonical sim and sends the WHOLE match, so both clients
       // snap their turn state — this is what fixes the post-foul turn desync.
-      const auth = last.finalState as Match;
+      const auth = msg.finalState as Match;
+      setStarted(true); // a resolved snapshot also confirms the match is live
       setMatch(auth);
-    } else if (last.t === 'gameover') {
+    } else if (msg.t === 'gameover') {
       // Drive the local match to "over" so the result overlay shows on the
       // client that didn't make the winning move (incl. opponent resignations).
-      const iWon = last.winner.toLowerCase() === identity?.address.toLowerCase();
+      const iWon = msg.winner.toLowerCase() === identity?.address.toLowerCase();
       const winnerIdx: 0 | 1 = iWon ? myIndex : myIndex === 0 ? 1 : 0;
       setMatch((m) =>
-        m ? { ...m, phase: 'over', turn: { ...m.turn, winner: winnerIdx, reason: last.reason } } : m,
+        m ? { ...m, phase: 'over', turn: { ...m.turn, winner: winnerIdx, reason: msg.reason } } : m,
       );
-      void offerSignResult(last.resultPayload);
-    } else if (last.t === 'opponent-left') {
+      void offerSignResult(msg.resultPayload);
+    } else if (msg.t === 'opponent-left') {
       setOpponentLeft(true);
       setStatus('Your opponent left the table.');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [last]);
+  };
 
   function onShoot(input: ShotInput) {
     if (!match) return;

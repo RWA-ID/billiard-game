@@ -33,7 +33,7 @@ export function WalletBar() {
               <span className="text-sm text-zinc-200">{identity.display}</span>
               {isGuest && (
                 <Link
-                  href="/?register=1"
+                  href="/register"
                   className="text-xs text-sage-bright/70 underline-offset-2 hover:underline"
                 >
                   Get an ENS name

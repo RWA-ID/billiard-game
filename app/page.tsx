@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { useAppKit } from '@reown/appkit/react';
 import { ConnectWallet } from '@/components/ConnectWallet';
 import { Lobby } from '@/components/Lobby';
-import { EnsPrompt } from '@/components/EnsPrompt';
-import { EnsRegister } from '@/components/EnsRegister';
+import { EnsNameCard } from '@/components/EnsNameCard';
 import { ChallengeModal } from '@/components/ChallengeModal';
 import { Avatar } from '@/components/Avatar';
 import { Leaderboard } from '@/components/Leaderboard';
@@ -19,16 +18,15 @@ import { useLobby } from '@/lib/net/useLobby';
 export default function Home() {
   const router = useRouter();
   const { isConnected } = useAccount();
-  const { identity, isGuest } = useIdentity();
+  const { identity } = useIdentity();
   const { players, incoming, outgoing, matched, connected, challenge, accept, decline } =
     useLobby(identity);
-  const [showRegister, setShowRegister] = useState(false);
   const lobbyRef = useRef<HTMLDivElement>(null);
+  const ensRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('register') === '1') {
-      setShowRegister(true);
-      lobbyRef.current?.scrollIntoView({ behavior: 'smooth' });
+      ensRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, []);
 
@@ -147,7 +145,7 @@ export default function Home() {
             <p className="mt-1 text-sm text-zinc-500">
               {isConnected
                 ? 'Pick an opponent below and break.'
-                : 'Connect a wallet to enter the lobby — injected wallets or Coinbase Smart Wallet (passkey, no extension).'}
+                : 'Connect a wallet to enter the lobby — scan the WalletConnect QR with any mobile wallet, or use a browser extension / Coinbase Smart Wallet.'}
             </p>
           </div>
         </div>
@@ -162,21 +160,25 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-            <Lobby
-              players={players}
-              connected={connected}
-              outgoing={outgoing}
-              onChallenge={challenge}
-            />
-            <aside className="space-y-6">
-              {isGuest && !showRegister && (
-                <EnsPrompt visible onRegister={() => setShowRegister(true)} />
-              )}
-              {showRegister && <EnsRegister onDone={() => setShowRegister(false)} />}
-            </aside>
-          </div>
+          <Lobby
+            players={players}
+            connected={connected}
+            outgoing={outgoing}
+            onChallenge={challenge}
+          />
         )}
+      </section>
+
+      {/* ── ENS identity (always visible) ────────────────────────────────── */}
+      <section ref={ensRef} id="register" className="mx-auto max-w-3xl scroll-mt-20 px-5 pb-12">
+        <div className="mb-5 text-center">
+          <h2 className="font-serif text-3xl font-700 text-cream">Your ENS identity</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Register a <span className="text-sage-bright">.eth</span> name, set your avatar and bio,
+            and make it your primary name. Optional — guests can still play and rank.
+          </p>
+        </div>
+        <EnsNameCard />
       </section>
 
       {/* ── Powered by ENS ───────────────────────────────────────────────── */}
@@ -233,6 +235,9 @@ function SiteHeader({ onPlay }: { onPlay: () => void }) {
           <a href="#how" className="transition hover:text-zinc-100">
             How it Works
           </a>
+          <Link href="/register" className="transition hover:text-zinc-100">
+            Get ENS
+          </Link>
           <Link href="/stats" className="transition hover:text-zinc-100">
             Leaderboard
           </Link>

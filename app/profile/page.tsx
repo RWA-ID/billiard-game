@@ -136,7 +136,7 @@ export default function ProfilePage() {
                         View ENS ↗
                       </a>
                     ) : (
-                      <a href="/?register=1" className="text-xs text-sage-bright hover:underline">
+                      <a href="/register" className="text-xs text-sage-bright hover:underline">
                         Get an ENS name
                       </a>
                     )}

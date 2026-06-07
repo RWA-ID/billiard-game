@@ -120,3 +120,74 @@ export const ETH_REGISTRAR_CONTROLLER_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
   },
 ] as const;
+
+/** ENS registry — used to read/set the resolver for a name the user owns. */
+export const ENS_REGISTRY_ABI = [
+  {
+    type: 'function',
+    name: 'resolver',
+    stateMutability: 'view',
+    inputs: [{ name: 'node', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [{ name: 'node', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'setResolver',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'node', type: 'bytes32' },
+      { name: 'resolver', type: 'address' },
+    ],
+    outputs: [],
+  },
+] as const;
+
+/** PublicResolver — set ETH address + text records (avatar/bio/url/…). */
+export const PUBLIC_RESOLVER_ABI = [
+  {
+    type: 'function',
+    name: 'setAddr',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'node', type: 'bytes32' },
+      { name: 'a', type: 'address' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setText',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'node', type: 'bytes32' },
+      { name: 'key', type: 'string' },
+      { name: 'value', type: 'string' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'multicall',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'data', type: 'bytes[]' }],
+    outputs: [{ name: 'results', type: 'bytes[]' }],
+  },
+] as const;
+
+/** ReverseRegistrar — set the connected wallet's primary (reverse) name. */
+export const REVERSE_REGISTRAR_ABI = [
+  {
+    type: 'function',
+    name: 'setName',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'name', type: 'string' }],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
+] as const;

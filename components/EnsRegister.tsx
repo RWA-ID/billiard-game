@@ -36,7 +36,13 @@ const LABEL_KEY = 'billiard.ensRegister.label';
  * Edge cases handled: wrong chain (prompt switch), name taken between steps,
  * lost secret (restart), commitment expiry, tx rejection.
  */
-export function EnsRegister({ onDone }: { onDone?: (name: string) => void }) {
+export function EnsRegister({
+  onDone,
+  bare = false,
+}: {
+  onDone?: (name: string) => void;
+  bare?: boolean;
+}) {
   const { address } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
@@ -167,8 +173,8 @@ export function EnsRegister({ onDone }: { onDone?: (name: string) => void }) {
 
   const busy = step !== 'idle' && step !== 'done';
 
-  return (
-    <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-5">
+  const inner = (
+    <>
       <h3 className="font-display text-lg font-700 text-zinc-100">Register an ENS name</h3>
       <p className="mt-1 text-sm text-zinc-400">
         Optional. A real second-level <span className="text-brass-light">.eth</span> name via the
@@ -244,8 +250,11 @@ export function EnsRegister({ onDone }: { onDone?: (name: string) => void }) {
           </Button>
         )}
       </div>
-    </div>
+    </>
   );
+
+  if (bare) return inner;
+  return <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-5">{inner}</div>;
 }
 
 function label_busy(step: Step): string {

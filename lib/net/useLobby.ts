@@ -29,28 +29,38 @@ export function useLobby(identity: Identity | null) {
   const [matched, setMatched] = useState<Matched | null>(null);
   const [connected, setConnected] = useState(false);
 
+  // Read the latest identity from a ref so the socket effect can depend ONLY on
+  // the stable wallet address — re-subscribing when ENS resolution mutates the
+  // identity object would drop a `matched`/`incoming` during the reconnect gap.
+  const idRef = useRef(identity);
+  idRef.current = identity;
+  const address = identity?.address;
+
   useEffect(() => {
-    if (!identity) return;
+    if (!address) return;
     const ch = connectLobby();
     chan.current = ch;
 
     const offOpen = ch.onOpen(() => {
       setConnected(true);
+      const id = idRef.current;
+      if (!id) return;
       ch.send({
         t: 'hello',
         player: {
-          address: identity.address,
-          ensName: identity.ensName,
-          avatar: identity.avatar,
+          address: id.address,
+          ensName: id.ensName,
+          avatar: id.avatar,
         },
       });
     });
     const offClose = ch.onClose(() => setConnected(false));
 
     const off = ch.on(async (msg) => {
+      const me = idRef.current?.address ?? '';
       switch (msg.t) {
         case 'presence':
-          setPlayers(msg.players.filter((p) => p.address.toLowerCase() !== identity.address.toLowerCase()));
+          setPlayers(msg.players.filter((p) => p.address.toLowerCase() !== me.toLowerCase()));
           break;
         case 'incoming': {
           // Verify the signature before surfacing — proves who issued it.
@@ -79,7 +89,7 @@ export function useLobby(identity: Identity | null) {
       ch.close();
       chan.current = null;
     };
-  }, [identity]);
+  }, [address]);
 
   const challenge = useCallback(
     async (opponent: Address) => {
