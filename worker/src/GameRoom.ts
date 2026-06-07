@@ -23,7 +23,7 @@ import type {
 } from '@/lib/net/protocol';
 import type { Env } from './index';
 
-type Seat = { ws: WebSocket; player: PlayerInfo };
+type Seat = { ws: WebSocket; player: PlayerInfo; breaker: boolean };
 
 export class GameRoom {
   private seats: Seat[] = []; // index 0 = breaker
@@ -61,7 +61,7 @@ export class GameRoom {
       }
       switch (msg.t) {
         case 'join':
-          this.onJoin(ws, msg.player);
+          this.onJoin(ws, msg.player, msg.youBreak);
           break;
         case 'shot':
           this.onShot(ws, msg.input);
@@ -81,19 +81,37 @@ export class GameRoom {
     ws.addEventListener('error', () => this.onLeave(ws));
   }
 
-  private onJoin(ws: WebSocket, player: PlayerInfo) {
+  private onJoin(ws: WebSocket, player: PlayerInfo, youBreak: boolean) {
     if (this.seats.length >= 2 && !this.seats.find((s) => s.ws === ws)) return;
-    if (!this.seats.find((s) => s.player.address.toLowerCase() === player.address.toLowerCase())) {
-      this.seats.push({ ws, player });
+    const existing = this.seats.find(
+      (s) => s.player.address.toLowerCase() === player.address.toLowerCase(),
+    );
+    if (existing) {
+      existing.ws = ws; // reconnect: refresh the socket
+      existing.breaker = youBreak;
+      // Catch a reconnecting client up to the in-progress match.
+      if (this.started && this.match) {
+        this.send(ws, {
+          t: 'start',
+          rackSeed: this.match.rackSeed,
+          turnAddress: this.currentAddress() ?? this.seats[0].player.address,
+        });
+        this.send(ws, {
+          t: 'resolved',
+          turn: this.match.shots,
+          finalState: this.match,
+          events: [],
+          nextTurn: this.currentAddress() ?? this.seats[0].player.address,
+        });
+      }
     } else {
-      // Reconnect: update the socket.
-      const seat = this.seats.find(
-        (s) => s.player.address.toLowerCase() === player.address.toLowerCase(),
-      )!;
-      seat.ws = ws;
+      this.seats.push({ ws, player, breaker: youBreak });
     }
 
     if (this.seats.length === 2 && !this.started) {
+      // Seat the lobby's designated breaker (challenger) as seat 0, regardless
+      // of socket join order, so the DO's turn order matches both clients.
+      this.seats.sort((a, b) => Number(b.breaker) - Number(a.breaker));
       this.started = true;
       const seed = seedFromRoom(this.roomId);
       this.match = newMatch(seed, 0); // seats[0] breaks
@@ -114,7 +132,10 @@ export class GameRoom {
     if (!this.match) return;
     const shooter = this.seats.find((s) => s.ws === ws);
     // Reject out-of-turn shots — the room is authoritative on turn order.
-    if (!shooter || shooter.player.address !== this.currentAddress()) {
+    if (
+      !shooter ||
+      shooter.player.address.toLowerCase() !== this.currentAddress()?.toLowerCase()
+    ) {
       this.send(ws, { t: 'error', message: 'not your turn' });
       return;
     }

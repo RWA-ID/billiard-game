@@ -66,7 +66,9 @@ export type LobbyServerMsg =
 
 // ── GameRoom messages (client ⇄ GameRoom DO) ───────────────────────────────
 export type RoomClientMsg =
-  | { t: 'join'; player: PlayerInfo }
+  // `youBreak` lets the DO seat the lobby's designated breaker as seat 0,
+  // regardless of which client's socket happens to join the room first.
+  | { t: 'join'; player: PlayerInfo; youBreak: boolean }
   | { t: 'shot'; input: ShotInput }
   // Diagnostic-only desync detector: client's locally-computed board hash.
   | { t: 'statehash'; turn: number; hash: string }

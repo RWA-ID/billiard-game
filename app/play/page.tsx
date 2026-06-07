@@ -31,6 +31,7 @@ export default function PlayPage() {
   const [match, setMatch] = useState<Match | null>(null);
   const [status, setStatus] = useState('');
   const [opponentLeft, setOpponentLeft] = useState(false);
+  const [started, setStarted] = useState(false);
 
   const { connected, last, sendShot, sendStateHash, sendSignedResult, resign } = useRoom(
     identity,
@@ -44,8 +45,10 @@ export default function PlayPage() {
       const parsed = JSON.parse(raw) as Matched;
       setCtx(parsed);
       // Deterministic rack seed shared by both clients via the room id.
+      // Seat 0 ALWAYS breaks (the DO seats the lobby's breaker as seat 0); the
+      // breaker vs. waiter distinction comes from myIndex, not the rack.
       const seed = seedFromRoom(parsed.roomId);
-      setMatch(newMatch(seed, parsed.youBreak ? 0 : 1));
+      setMatch(newMatch(seed, 0));
     } else {
       // No context: local hot-seat for physics/rules validation.
       setMatch(newMatch(Date.now() & 0xffff, 0));
@@ -55,7 +58,13 @@ export default function PlayPage() {
   // My player index: breaker = 0.
   const myIndex: 0 | 1 = ctx ? (ctx.youBreak ? 0 : 1) : 0;
   const hotSeat = !ctx;
-  const myTurn = !!match && match.phase !== 'over' && (hotSeat || match.turn.current === myIndex);
+  // In multiplayer, don't allow a shot until the DO has confirmed both players
+  // joined (the `start` message) — otherwise the breaker could fire into a room
+  // the opponent hasn't entered yet, and the shot would be dropped server-side.
+  const myTurn =
+    !!match &&
+    match.phase !== 'over' &&
+    (hotSeat || (started && match.turn.current === myIndex));
 
   // Resolve the opponent's ENS name (fallback if the lobby didn't carry one).
   const opp = useEnsProfile(ctx && !ctx.opponent.ensName ? ctx.opponent.address : null);
@@ -71,7 +80,10 @@ export default function PlayPage() {
   // Reconcile to the DO's authoritative match (board + turn) when it resolves.
   useEffect(() => {
     if (!last) return;
-    if (last.t === 'resolved') {
+    if (last.t === 'start') {
+      // Both players are in the room; the DO has racked. Enable input.
+      setStarted(true);
+    } else if (last.t === 'resolved') {
       // The DO ran the canonical sim and sends the WHOLE match, so both clients
       // snap their turn state — this is what fixes the post-foul turn desync.
       const auth = last.finalState as Match;
@@ -135,8 +147,9 @@ export default function PlayPage() {
     if (!match) return '';
     if (match.phase === 'over') return 'Match over';
     if (hotSeat) return `Player ${match.turn.current + 1} to shoot`;
+    if (!started) return 'Waiting for opponent…';
     return myTurn ? 'Your shot' : "Opponent's shot";
-  }, [match, myTurn, hotSeat]);
+  }, [match, myTurn, hotSeat, started]);
 
   return (
     <main className="min-h-screen">

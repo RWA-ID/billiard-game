@@ -34,6 +34,7 @@ export function useRoom(identity: Identity | null, match: Matched | null) {
       ch.send({
         t: 'join',
         player: { address: identity.address, ensName: identity.ensName, avatar: identity.avatar },
+        youBreak: match.youBreak,
       });
     });
     const offClose = ch.onClose(() => setConnected(false));
