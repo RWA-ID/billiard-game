@@ -5,6 +5,7 @@
 import {
   rackBalls,
   simulate,
+  TABLE,
   type GameState,
   type ShotInput,
   type SimResult,
@@ -61,7 +62,7 @@ export function applyShot(match: Match, input: ShotInput): AppliedShot {
   const result = simulate(match.board, input);
   const board = result.finalState;
 
-  const outcome = evaluateShot(match.turn, result, remainingCounter(board));
+  const outcome = evaluateShot(match.turn, result, remainingCounter(board), input.calledPocket);
 
   // Re-spot the cue ball if it was scratched (ball-in-hand handles placement).
   const cue = board.balls.find((b) => b.id === 0);
@@ -92,12 +93,31 @@ export function applyShot(match: Match, input: ShotInput): AppliedShot {
   };
 }
 
+/** Is (x,y) a legal cue-ball placement — in bounds and clear of other balls? */
+export function canPlaceCue(board: GameState, x: number, y: number): boolean {
+  const r = TABLE.ballRadius;
+  if (x < r || x > TABLE.width - r || y < r || y > TABLE.height - r) return false;
+  return board.balls.every(
+    (b) => b.id === 0 || b.potted || Math.hypot(b.x - x, b.y - y) >= r * 2,
+  );
+}
+
+/** Clamp a requested cue placement into the playable area (bounds only). */
+function clampCue(x: number, y: number): { x: number; y: number } {
+  const r = TABLE.ballRadius;
+  return {
+    x: Math.max(r, Math.min(TABLE.width - r, x)),
+    y: Math.max(r, Math.min(TABLE.height - r, y)),
+  };
+}
+
 /** Place the cue ball anywhere (ball-in-hand) before the next shot. */
 export function placeCueBall(match: Match, x: number, y: number): Match {
+  const p = clampCue(x, y);
   const board: GameState = {
     rackSeed: match.board.rackSeed,
     balls: match.board.balls.map((b) =>
-      b.id === 0 ? { ...b, x, y, vx: 0, vy: 0, potted: false, pocket: -1 } : { ...b },
+      b.id === 0 ? { ...b, x: p.x, y: p.y, vx: 0, vy: 0, potted: false, pocket: -1 } : { ...b },
     ),
   };
   return { ...match, board, turn: { ...match.turn, ballInHand: false } };

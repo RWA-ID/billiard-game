@@ -57,6 +57,7 @@ export function evaluateShot(
   turn: TurnState,
   result: SimResult,
   remainingOf: (g: Exclude<Group, null>) => number,
+  calledPocket?: number | null,
 ): ShotOutcome {
   const t: TurnState = { ...turn, groups: [...turn.groups] as [Group, Group] };
   const pot = potted(result.events);
@@ -100,16 +101,28 @@ export function evaluateShot(
   if (eightPotted) {
     const myGroup = t.groups[t.current];
     const clearedBeforeEight = myGroup ? remainingOf(myGroup) === 0 : false;
-    const legalEight = !t.open && clearedBeforeEight && !cueScratched;
+    // Which pocket the 8 actually fell into.
+    const eightPot = result.events.find(
+      (e): e is Extract<SimEvent, { type: 'pot' }> => e.type === 'pot' && e.ball === 8,
+    );
+    const eightPocket = eightPot?.pocket;
+    // Call-pocket: if a pocket was called, the 8 must drop there. No call (e.g.
+    // a stray 8 on the break) stays lenient so a missing call can't brick a game.
+    const calledOk = calledPocket == null || eightPocket === calledPocket;
+    const legalEight = !t.open && clearedBeforeEight && !cueScratched && calledOk;
     if (legalEight) {
       t.winner = t.current;
       t.loser = (t.current === 0 ? 1 : 0) as 0 | 1;
       t.reason = 'potted the 8 on a clear table';
     } else {
-      // Early 8 or 8 + scratch → current player loses.
+      // Early 8, wrong pocket, or 8 + scratch → current player loses.
       t.loser = t.current;
       t.winner = (t.current === 0 ? 1 : 0) as 0 | 1;
-      t.reason = cueScratched ? 'potted the 8 with a scratch' : 'potted the 8 early';
+      t.reason = cueScratched
+        ? 'potted the 8 with a scratch'
+        : !calledOk && clearedBeforeEight && !t.open
+          ? 'potted the 8 in the wrong pocket'
+          : 'potted the 8 early';
     }
     return { next: t, foul, foulReason, pottedBalls: pot };
   }

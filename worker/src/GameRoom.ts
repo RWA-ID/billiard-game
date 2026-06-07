@@ -10,7 +10,7 @@
  * sign the same payload it writes the win/loss to KV; otherwise it records its
  * OWN authoritative outcome and marks the match disputed.
  */
-import { applyShot, newMatch, type Match } from '@/lib/game/state';
+import { applyShot, canPlaceCue, newMatch, placeCueBall, type Match } from '@/lib/game/state';
 import { hashState, type ShotInput } from '@/lib/game/physics';
 import { verifyResult } from '@/lib/crypto/sign';
 import { recordResult } from './stats';
@@ -65,6 +65,9 @@ export class GameRoom {
           break;
         case 'shot':
           this.onShot(ws, msg.input);
+          break;
+        case 'place-cue':
+          this.onPlaceCue(ws, msg.x, msg.y);
           break;
         case 'statehash':
           this.onStateHash(msg.turn, msg.hash);
@@ -171,6 +174,24 @@ export class GameRoom {
         ballInHand: this.match.turn.ballInHand,
       });
     }
+  }
+
+  private onPlaceCue(ws: WebSocket, x: number, y: number) {
+    if (!this.match || !this.match.turn.ballInHand) return;
+    const placer = this.seats.find((s) => s.ws === ws);
+    // Only the player in hand (current turn) may place the cue ball.
+    if (!placer || placer.player.address.toLowerCase() !== this.currentAddress()?.toLowerCase()) {
+      return;
+    }
+    if (!canPlaceCue(this.match.board, x, y)) return;
+    this.match = placeCueBall(this.match, x, y);
+    this.broadcast({
+      t: 'resolved',
+      turn: this.match.shots,
+      finalState: this.match,
+      events: [],
+      nextTurn: this.currentAddress() ?? this.seats[0].player.address,
+    });
   }
 
   private onStateHash(turn: number, hash: string) {

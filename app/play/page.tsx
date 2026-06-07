@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/Avatar';
 import { useIdentity } from '@/lib/wallet/useIdentity';
 import { useRoom } from '@/lib/net/useRoom';
-import { applyShot, newMatch, type Match } from '@/lib/game/state';
+import { applyShot, newMatch, placeCueBall, type Match } from '@/lib/game/state';
 import { hashState, type ShotInput } from '@/lib/game/physics';
 import { resultMessage } from '@/lib/crypto/sign';
 import { useEnsProfile } from '@/lib/ens/useEnsProfile';
@@ -35,11 +35,12 @@ export default function PlayPage() {
 
   // Latest message handler, read from a ref so useRoom never re-subscribes.
   const handlerRef = useRef<(msg: RoomServerMsg) => void>(() => {});
-  const { connected, sendShot, sendStateHash, sendSignedResult, resign } = useRoom(
+  const { connected, sendShot, sendPlaceCue, sendStateHash, sendSignedResult, resign } = useRoom(
     identity,
     ctx,
     (msg) => handlerRef.current(msg),
   );
+  const [calledPocket, setCalledPocket] = useState<number | null>(null);
 
   // Load the match context the lobby stashed (or fall back to local hot-seat).
   useEffect(() => {
@@ -68,6 +69,27 @@ export default function PlayPage() {
     !!match &&
     match.phase !== 'over' &&
     (hotSeat || (started && match.turn.current === myIndex));
+
+  // On the 8-ball? (my group assigned and fully cleared) — then I must call a
+  // pocket. Ball-in-hand: I fouled-against, so I place the cue ball first.
+  const myGroup = match && !match.turn.open ? match.turn.groups[myIndex] : null;
+  const onEight =
+    !!myGroup &&
+    !!match &&
+    match.board.balls.filter((b) => inGroup(b.id, myGroup) && !b.potted).length === 0;
+  const ballInHand = myTurn && !!match?.turn.ballInHand;
+  const needCall = myTurn && !ballInHand && onEight;
+
+  // Clear a stale called pocket whenever it no longer applies.
+  useEffect(() => {
+    if (!needCall) setCalledPocket(null);
+  }, [needCall]);
+
+  function placeCue(x: number, y: number) {
+    if (!match) return;
+    setMatch(placeCueBall(match, x, y));
+    if (!hotSeat) sendPlaceCue(x, y);
+  }
 
   // Resolve the opponent's ENS name (fallback if the lobby didn't carry one).
   const opp = useEnsProfile(ctx && !ctx.opponent.ensName ? ctx.opponent.address : null);
@@ -109,6 +131,7 @@ export default function PlayPage() {
 
   function onShoot(input: ShotInput) {
     if (!match) return;
+    setCalledPocket(null);
     // Local authority for hot-seat / optimistic update; relay to DO otherwise.
     const applied = applyShot(match, input);
     setMatch(applied.match);
@@ -181,7 +204,41 @@ export default function PlayPage() {
           </div>
         </div>
 
-        {match && <PoolCanvas board={match.board} myTurn={myTurn} onShoot={onShoot} />}
+        {needCall && (
+          <div className="mb-3 rounded-xl border border-sage/40 bg-sage/5 p-3">
+            <p className="mb-2 text-center text-sm font-600 text-sage-bright">
+              You&apos;re on the 8 — call your pocket:
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {POCKET_LABELS.map((label, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCalledPocket(i)}
+                  className={
+                    'rounded-lg border px-2 py-1.5 text-xs font-500 transition ' +
+                    (calledPocket === i
+                      ? 'border-sage bg-sage/15 text-sage-bright'
+                      : 'border-ink-line text-zinc-300 hover:border-sage/40')
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {match && (
+          <PoolCanvas
+            board={match.board}
+            myTurn={myTurn}
+            onShoot={onShoot}
+            ballInHand={ballInHand}
+            onPlaceCue={placeCue}
+            needCall={needCall}
+            calledPocket={calledPocket}
+          />
+        )}
 
         {status && (
           <p className="mt-3 text-center text-sm text-brass-light">{status}</p>
@@ -249,6 +306,21 @@ function buildResult(match: Match, ctx: Matched | null): ResultPayload {
     shots: match.shots,
     finishedAt: Date.now(),
   };
+}
+
+// Pocket index → human label, matching physics.POCKETS order.
+const POCKET_LABELS = [
+  'Top-left',
+  'Top-middle',
+  'Top-right',
+  'Bottom-left',
+  'Bottom-middle',
+  'Bottom-right',
+];
+
+function inGroup(id: number, group: 'solids' | 'stripes' | null): boolean {
+  if (!group) return false;
+  return group === 'solids' ? id >= 1 && id <= 7 : id >= 9 && id <= 15;
 }
 
 /** Deterministic 16-bit rack seed from a room id (both clients agree). */

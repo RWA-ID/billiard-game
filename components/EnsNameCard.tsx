@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAccount, useChainId, useSwitchChain, useWriteContract } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { mainnet } from 'wagmi/chains';
@@ -17,8 +17,8 @@ import {
   buildRecordCalls,
   getResolver,
   isZeroResolver,
-  listOwnedNames,
   nodeOf,
+  ownsName,
   readProfile,
   type ProfileRecords,
 } from '@/lib/ens/manage';
@@ -38,39 +38,40 @@ import { Badge } from './ui/Badge';
 export function EnsNameCard() {
   const { address, isConnected } = useAccount();
   const { identity } = useIdentity();
-  const [registered, setRegistered] = useState<string[]>([]);
-  const [owned, setOwned] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
-
-  // Names the wallet owns (subgraph, best-effort) + the known primary.
-  useEffect(() => {
-    if (!address) {
-      setOwned([]);
-      return;
-    }
-    let cancelled = false;
-    listOwnedNames(address)
-      .then((ns) => {
-        if (!cancelled) setOwned(ns);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [address]);
-
-  const names = useMemo(() => {
-    const set = new Set<string>();
-    if (identity?.ensName) set.add(identity.ensName);
-    registered.forEach((n) => set.add(n));
-    owned.forEach((n) => set.add(n));
-    return [...set].sort();
-  }, [identity?.ensName, registered, owned]);
+  const [manageInput, setManageInput] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
 
   const onRegistered = (name: string) => {
-    setRegistered((r) => (r.includes(name) ? r : [...r, name]));
     setSelected(name); // open the editor for the freshly registered name
   };
+
+  async function manageName(raw: string) {
+    setManageError(null);
+    if (!address) return;
+    const name = normalizeName(raw);
+    if (!name) {
+      setManageError('Enter a name like yourname.eth');
+      return;
+    }
+    setChecking(true);
+    try {
+      const owns = await ownsName(name, address);
+      if (owns) {
+        setSelected(name);
+        setManageInput('');
+      } else {
+        setManageError(
+          `Your connected wallet doesn't manage ${name} (wrapped names are managed on the ENS app).`,
+        );
+      }
+    } catch {
+      setManageError('Could not verify ownership — try again.');
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-4 shadow-card">
@@ -91,26 +92,40 @@ export function EnsNameCard() {
 
           <EnsRegister bare compact onDone={onRegistered} />
 
-          {names.length > 0 && (
-            <div className="border-t border-ink-line/60 pt-3">
-              <label className="mb-1.5 block text-xs uppercase tracking-wide text-zinc-500">
-                Have a name? Choose one to update
-              </label>
-              <select
-                value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-                className="w-full rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sage/40"
-              >
-                <option value="">Choose a name…</option>
-                {names.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                    {identity?.ensName === n ? '  (primary)' : ''}
-                  </option>
-                ))}
-              </select>
+          <div className="border-t border-ink-line/60 pt-3">
+            <label className="mb-1.5 block text-xs uppercase tracking-wide text-zinc-500">
+              Already have a name? Manage one you own
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 items-center rounded-lg border border-ink-line bg-[#0e1213] px-3 py-2">
+                <input
+                  value={manageInput}
+                  onChange={(e) => setManageInput(e.target.value.toLowerCase().replace(/\s/g, ''))}
+                  onKeyDown={(e) => e.key === 'Enter' && manageName(manageInput)}
+                  placeholder="yourname.eth"
+                  className="w-full bg-transparent font-mono text-sm outline-none placeholder:text-zinc-600"
+                />
+              </div>
+              <Button onClick={() => manageName(manageInput)} disabled={checking || !manageInput}>
+                {checking ? (
+                  <>
+                    <Spinner size={13} /> Checking…
+                  </>
+                ) : (
+                  'Manage'
+                )}
+              </Button>
             </div>
-          )}
+            {identity?.ensName && identity.ensName !== selected && (
+              <button
+                onClick={() => setSelected(identity.ensName!)}
+                className="mt-1.5 text-xs text-sage-bright hover:underline"
+              >
+                Manage your primary name ({identity.ensName})
+              </button>
+            )}
+            {manageError && <p className="mt-1.5 text-xs text-red-400">{manageError}</p>}
+          </div>
 
           {selected && (
             <EnsProfileEditor
@@ -124,6 +139,16 @@ export function EnsNameCard() {
       )}
     </div>
   );
+}
+
+/** Normalize user input to a `<label>.eth` 2LD, or '' if invalid. */
+function normalizeName(raw: string): string {
+  let n = raw.trim().toLowerCase();
+  if (!n) return '';
+  if (!n.endsWith('.eth')) n = `${n}.eth`;
+  const label = n.slice(0, -4);
+  if (!label || !/^[a-z0-9-]+$/.test(label)) return '';
+  return n;
 }
 
 // ── Profile editor (only rendered when a name is selected) ──────────────────

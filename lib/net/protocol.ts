@@ -25,6 +25,7 @@ export type ShotInput = {
   angle: number; // radians
   power: number; // 0..1 normalized pull distance
   spin: { x: number; y: number }; // cue-ball contact offset, -1..1
+  calledPocket?: number; // pocket index called for the 8-ball (when on the 8)
 };
 
 // ── Signed challenge / acceptance / result payloads (no gas, no contract). ──
@@ -70,6 +71,8 @@ export type RoomClientMsg =
   // regardless of which client's socket happens to join the room first.
   | { t: 'join'; player: PlayerInfo; youBreak: boolean }
   | { t: 'shot'; input: ShotInput }
+  // Ball-in-hand: place the cue ball after the opponent fouled.
+  | { t: 'place-cue'; x: number; y: number }
   // Diagnostic-only desync detector: client's locally-computed board hash.
   | { t: 'statehash'; turn: number; hash: string }
   | { t: 'sign-result'; signed: Signed<ResultPayload> }

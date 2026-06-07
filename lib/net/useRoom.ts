@@ -75,6 +75,7 @@ export function useRoom(
   return {
     connected,
     sendShot: (input: ShotInput) => send({ t: 'shot', input }),
+    sendPlaceCue: (x: number, y: number) => send({ t: 'place-cue', x, y }),
     sendStateHash: (turn: number, hash: string) => send({ t: 'statehash', turn, hash }),
     sendSignedResult: (signed: Signed<ResultPayload>) => send({ t: 'sign-result', signed }),
     resign: () => send({ t: 'resign' }),

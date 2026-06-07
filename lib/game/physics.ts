@@ -40,6 +40,18 @@ export const POCKETS: ReadonlyArray<readonly [number, number]> = [
   [TABLE.width, TABLE.height],
 ];
 
+// Pocket geometry (table units):
+//  - CAPTURE: a ball whose CENTER comes within this of a pocket centre drops.
+//  - MOUTH: how far along a rail the cushion is "open" around a pocket, so a
+//    ball can roll into the jaws instead of bouncing off the rail.
+export const POCKET_CAPTURE = 2.2;
+export const POCKET_MOUTH = 2.9;
+
+// X-coords of pockets on the top/bottom rails; Y-coords on the left/right rails.
+const X_POCKETS = [0, TABLE.width / 2, TABLE.width];
+const Y_POCKETS = [0, TABLE.height];
+const nearAny = (v: number, ps: number[]) => ps.some((p) => Math.abs(v - p) < POCKET_MOUTH);
+
 export type Ball = {
   id: number; // 0 = cue, 1..7 solids, 8 = eight, 9..15 stripes
   x: number;
@@ -73,6 +85,7 @@ export type ShotInput = {
   angle: number; // radians
   power: number; // 0..1
   spin: { x: number; y: number }; // -1..1 contact offset
+  calledPocket?: number; // pocket index called for the 8-ball (when on the 8)
 };
 
 // ── Deterministic PRNG (mulberry32) — seeded, no global Math.random. ────────
@@ -191,34 +204,6 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
       opts.frames.push(s.balls.map((b) => ({ ...b })));
     }
 
-    // Cushion collisions (axis-aligned walls).
-    for (const b of s.balls) {
-      if (b.potted) continue;
-      let hit = false;
-      if (b.x < r) {
-        b.x = r;
-        b.vx = Math.abs(b.vx) * PHYS.cushionRestitution;
-        hit = true;
-      } else if (b.x > TABLE.width - r) {
-        b.x = TABLE.width - r;
-        b.vx = -Math.abs(b.vx) * PHYS.cushionRestitution;
-        hit = true;
-      }
-      if (b.y < r) {
-        b.y = r;
-        b.vy = Math.abs(b.vy) * PHYS.cushionRestitution;
-        hit = true;
-      } else if (b.y > TABLE.height - r) {
-        b.y = TABLE.height - r;
-        b.vy = -Math.abs(b.vy) * PHYS.cushionRestitution;
-        hit = true;
-      }
-      if (hit) {
-        events.push({ type: 'cushion', ball: b.id });
-        if (firstContact !== null) cushionAfterContact = true;
-      }
-    }
-
     // Ball-ball collisions (elastic, equal mass).
     for (let i = 0; i < s.balls.length; i++) {
       const a = s.balls[i];
@@ -262,12 +247,12 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
       }
     }
 
-    // Pocket detection.
+    // Pocket capture — BEFORE cushions, so the pocket jaws aren't walled off.
     for (const b of s.balls) {
       if (b.potted) continue;
       for (let p = 0; p < POCKETS.length; p++) {
         const [px, py] = POCKETS[p];
-        if (Math.hypot(b.x - px, b.y - py) < TABLE.pocketRadius) {
+        if (Math.hypot(b.x - px, b.y - py) < POCKET_CAPTURE) {
           b.potted = true;
           b.pocket = p;
           b.vx = 0;
@@ -275,6 +260,63 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
           events.push({ type: 'pot', ball: b.id, pocket: p });
           break;
         }
+      }
+    }
+
+    // Cushion collisions — the rail is OPEN near each pocket mouth so a ball can
+    // roll into the jaws instead of bouncing off a wall that spans the opening.
+    for (const b of s.balls) {
+      if (b.potted) continue;
+      let hit = false;
+      const openSide = nearAny(b.y, Y_POCKETS); // left/right rails open near corners
+      const openEnd = nearAny(b.x, X_POCKETS); //  top/bottom rails open near pockets
+      if (!openSide) {
+        if (b.x < r) {
+          b.x = r;
+          b.vx = Math.abs(b.vx) * PHYS.cushionRestitution;
+          hit = true;
+        } else if (b.x > TABLE.width - r) {
+          b.x = TABLE.width - r;
+          b.vx = -Math.abs(b.vx) * PHYS.cushionRestitution;
+          hit = true;
+        }
+      }
+      if (!openEnd) {
+        if (b.y < r) {
+          b.y = r;
+          b.vy = Math.abs(b.vy) * PHYS.cushionRestitution;
+          hit = true;
+        } else if (b.y > TABLE.height - r) {
+          b.y = TABLE.height - r;
+          b.vy = -Math.abs(b.vy) * PHYS.cushionRestitution;
+          hit = true;
+        }
+      }
+      if (hit) {
+        events.push({ type: 'cushion', ball: b.id });
+        if (firstContact !== null) cushionAfterContact = true;
+      }
+    }
+
+    // Escape backstop: a ball past a boundary can only be inside a pocket mouth
+    // (the solid rail clamps the rest), so drop it into the nearest pocket.
+    for (const b of s.balls) {
+      if (b.potted) continue;
+      if (b.x < 0 || b.x > TABLE.width || b.y < 0 || b.y > TABLE.height) {
+        let best = 0;
+        let bestD = Infinity;
+        for (let p = 0; p < POCKETS.length; p++) {
+          const d = Math.hypot(b.x - POCKETS[p][0], b.y - POCKETS[p][1]);
+          if (d < bestD) {
+            bestD = d;
+            best = p;
+          }
+        }
+        b.potted = true;
+        b.pocket = best;
+        b.vx = 0;
+        b.vy = 0;
+        events.push({ type: 'pot', ball: b.id, pocket: best });
       }
     }
   }
