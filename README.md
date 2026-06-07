@@ -12,7 +12,7 @@ name registration.
 ```
 ┌─ Frontend (Next.js static export → IPFS) ────────────────┐
 │  app/         landing+lobby, /play (canvas), /stats       │
-│  lib/wallet   wagmi config — INJECTED / EIP-6963 ONLY     │
+│  lib/wallet   wagmi config — Reown AppKit (WC QR + more)  │
 │  lib/ens      pinned ENS ABIs, resolve, commit/reveal     │
 │  lib/game     deterministic physics + 8-ball rules        │
 │  lib/net      WS client + shared protocol shapes          │
@@ -35,11 +35,21 @@ engines, so client-side results can't be trusted to decide a match — the DO's
 result is authoritative. Clients animate locally for instant feedback then snap
 to the DO. A client-sent state hash is a **diagnostic desync detector only**.
 
-## Wallet — no WalletConnect
-`lib/wallet/config.ts` builds a custom wagmi `createConfig` with
-`injected()` + `coinbaseWallet()` connectors only. No `projectId`, no
-`getDefaultConfig`, no `walletConnect` connector. EIP-6963 discovery populates
-the wallet list automatically. See `app/providers.tsx`.
+## Wallet — Reown AppKit (WalletConnect)
+`lib/wallet/config.ts` builds a wagmi `WagmiAdapter` from
+`@reown/appkit-adapter-wagmi`, and `app/providers.tsx` calls `createAppKit()`
+once at module load. The AppKit modal offers a **WalletConnect QR code** for all
+mobile wallets (Rainbow, MetaMask Mobile, Trust, …) alongside injected/EIP-6963
+extensions and Coinbase Smart Wallet. The connect UI is opened imperatively via
+`useAppKit().open()` — the shared `components/ConnectWallet.tsx` button wraps it.
+
+Set the Reown (WalletConnect) project id via `NEXT_PUBLIC_WC_PROJECT_ID`; it
+defaults to the project's canonical id `43bdd1b8c477ac4d4a4264a14a8472f8`. Create
+your own at <https://dashboard.reown.com>.
+
+> Build note: WalletConnect's `pino` logger optionally requires `pino-pretty`
+> (dev only); `next.config.js` aliases it to `false` to silence the webpack
+> "Module not found" warning.
 
 ## ENS is optional
 A connected wallet is enough to play, challenge, and rank. ENS just gives a
@@ -76,7 +86,8 @@ exercises the physics + rules without the Worker.
    rebuild, re-pin. Worker CORS already allows `.eth` / `.eth.link` origins.
 
 ## Constraints (do not violate)
-- No WalletConnect projectId; injected/EIP-6963 + Coinbase only.
+- Wallet via Reown AppKit (WalletConnect QR + injected/EIP-6963 + Coinbase);
+  project id from `NEXT_PUBLIC_WC_PROJECT_ID`.
 - No game contract; challenges/results are signed messages.
 - Fully static frontend; all dynamic behavior in the Worker/DO.
 - Deterministic physics, but the GameRoom DO is authoritative; hashes detect drift.

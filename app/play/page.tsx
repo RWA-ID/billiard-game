@@ -13,7 +13,7 @@ import { useRoom } from '@/lib/net/useRoom';
 import { applyShot, newMatch, type Match } from '@/lib/game/state';
 import { hashState, type ShotInput } from '@/lib/game/physics';
 import { resultMessage } from '@/lib/crypto/sign';
-import { truncate } from '@/lib/ens/resolve';
+import { useEnsProfile } from '@/lib/ens/useEnsProfile';
 import type { Matched, ResultPayload } from '@/lib/net/protocol';
 
 /**
@@ -30,8 +30,12 @@ export default function PlayPage() {
   const [ctx, setCtx] = useState<Matched | null>(null);
   const [match, setMatch] = useState<Match | null>(null);
   const [status, setStatus] = useState('');
+  const [opponentLeft, setOpponentLeft] = useState(false);
 
-  const { connected, last, sendShot, sendStateHash, sendSignedResult } = useRoom(identity, ctx);
+  const { connected, last, sendShot, sendStateHash, sendSignedResult, resign } = useRoom(
+    identity,
+    ctx,
+  );
 
   // Load the match context the lobby stashed (or fall back to local hot-seat).
   useEffect(() => {
@@ -53,18 +57,37 @@ export default function PlayPage() {
   const hotSeat = !ctx;
   const myTurn = !!match && match.phase !== 'over' && (hotSeat || match.turn.current === myIndex);
 
-  // Reconcile to the DO's authoritative board when it resolves a shot.
+  // Resolve the opponent's ENS name (fallback if the lobby didn't carry one).
+  const opp = useEnsProfile(ctx && !ctx.opponent.ensName ? ctx.opponent.address : null);
+  const opponentName = ctx ? (ctx.opponent.ensName ?? opp.display) : '';
+
+  // Leaving mid-match counts as a resignation — tell the DO before we close the
+  // socket so the opponent gets notified immediately, then navigate.
+  function leaveTable() {
+    if (!hotSeat && match && match.phase !== 'over') resign();
+    router.push('/');
+  }
+
+  // Reconcile to the DO's authoritative match (board + turn) when it resolves.
   useEffect(() => {
-    if (!last || !match) return;
+    if (!last) return;
     if (last.t === 'resolved') {
-      // The DO ran the canonical sim; snap our board to it.
-      // (finalState shape matches GameState — typed as unknown over the wire.)
-      const auth = last.finalState as Match['board'];
-      setMatch((m) => (m ? { ...m, board: auth } : m));
+      // The DO ran the canonical sim and sends the WHOLE match, so both clients
+      // snap their turn state — this is what fixes the post-foul turn desync.
+      const auth = last.finalState as Match;
+      setMatch(auth);
     } else if (last.t === 'gameover') {
+      // Drive the local match to "over" so the result overlay shows on the
+      // client that didn't make the winning move (incl. opponent resignations).
+      const iWon = last.winner.toLowerCase() === identity?.address.toLowerCase();
+      const winnerIdx: 0 | 1 = iWon ? myIndex : myIndex === 0 ? 1 : 0;
+      setMatch((m) =>
+        m ? { ...m, phase: 'over', turn: { ...m.turn, winner: winnerIdx, reason: last.reason } } : m,
+      );
       void offerSignResult(last.resultPayload);
     } else if (last.t === 'opponent-left') {
-      setStatus('Opponent left the table.');
+      setOpponentLeft(true);
+      setStatus('Your opponent left the table.');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [last]);
@@ -82,7 +105,9 @@ export default function PlayPage() {
       sendStateHash(applied.match.shots, hashState(applied.match.board));
     }
 
-    if (applied.match.turn.winner !== null) {
+    // Hot-seat is its own authority; in multiplayer the DO drives `gameover`
+    // (signing there) so we don't double-prompt for a signature.
+    if (hotSeat && applied.match.turn.winner !== null) {
       const payload = buildResult(applied.match, ctx);
       void offerSignResult(payload);
     }
@@ -127,16 +152,14 @@ export default function PlayPage() {
                 {hotSeat
                   ? 'Local practice table'
                   : ctx
-                    ? `vs ${ctx.opponent.ensName ?? truncate(ctx.opponent.address)} · ${
-                        connected ? 'connected' : 'connecting…'
-                      }`
+                    ? `vs ${opponentName} · ${connected ? 'connected' : 'connecting…'}`
                     : ''}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {match && <GroupBadges match={match} myIndex={myIndex} hotSeat={hotSeat} />}
-            <Button variant="ghost" onClick={() => router.push('/')}>
+            <Button variant="ghost" onClick={leaveTable}>
               Leave
             </Button>
           </div>
@@ -146,6 +169,18 @@ export default function PlayPage() {
 
         {status && (
           <p className="mt-3 text-center text-sm text-brass-light">{status}</p>
+        )}
+
+        {opponentLeft && !over && (
+          <div className="mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-ink-card/70 p-8 text-center shadow-brass">
+            <p className="font-display text-2xl font-700 text-zinc-50">Opponent left</p>
+            <p className="mt-1 text-sm text-zinc-400">
+              Your opponent disconnected from the table.
+            </p>
+            <div className="mt-5">
+              <Button onClick={() => router.push('/')}>Back to lobby</Button>
+            </div>
+          </div>
         )}
 
         {over && (

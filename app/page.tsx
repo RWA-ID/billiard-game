@@ -329,12 +329,12 @@ function AnywherePromo() {
         Jump in from any device. No downloads. No friction. Just pure pool.
       </p>
 
-      {/* top-down table photo */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-ink-line/80 shadow-2xl ring-1 ring-sage/10">
+      {/* top-down table photo — full table, natural 3:2 ratio (no crop) */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-ink-line/80 bg-black shadow-2xl ring-1 ring-sage/10">
         <img
           src="/anywhere-table.jpg"
           alt="A racked pool table seen from above"
-          className="h-44 w-full object-cover"
+          className="block h-auto w-full"
         />
       </div>
     </div>
@@ -380,20 +380,18 @@ function EnsMark({ size = 18 }: { size?: number }) {
     </svg>
   );
 }
-// Official-style ENS mark: blue rounded square with the white twist glyph.
+// Official ENS logo (the real mark, served from /public).
 function EnsLogo({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 96 96" fill="none" aria-hidden>
-      <rect width="96" height="96" rx="22" fill="#3a8ec9" />
-      <g fill="#fff">
-        <path d="M48 10C40 22 28 34 18 48C30 42 40 38 44 33C45 25 46 17 48 10Z" />
-        <path d="M48 10C52 24 60 34 80 52C66 50 56 46 50 38C47 30 47 19 48 10Z" />
-      </g>
-      <g fill="#fff" transform="rotate(180 48 48)">
-        <path d="M48 10C40 22 28 34 18 48C30 42 40 38 44 33C45 25 46 17 48 10Z" />
-        <path d="M48 10C52 24 60 34 80 52C66 50 56 46 50 38C47 30 47 19 48 10Z" />
-      </g>
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/ens-logo.png"
+      alt="ENS"
+      width={size}
+      height={size}
+      className="rounded-[22%]"
+      style={{ width: size, height: size }}
+    />
   );
 }
 function PlayIcon() {

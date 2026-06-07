@@ -1,7 +1,7 @@
 'use client';
 
 import type { Signed, ChallengePayload } from '@/lib/net/protocol';
-import { truncate } from '@/lib/ens/resolve';
+import { useEnsProfile } from '@/lib/ens/useEnsProfile';
 import { Button } from './ui/Button';
 import { Avatar } from './Avatar';
 
@@ -15,17 +15,18 @@ export function ChallengeModal({
   onAccept: () => void;
   onDecline: () => void;
 }) {
-  if (!incoming) return null;
-  const from = incoming.payload.challenger;
+  const from = incoming?.payload.challenger ?? null;
+  const { display, avatar } = useEnsProfile(from);
+  if (!incoming || !from) return null;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-brass/30 bg-ink-card p-6 shadow-brass">
         <div className="flex items-center gap-3">
-          <Avatar address={from} size={44} />
-          <div>
+          <Avatar address={from} avatar={avatar} size={44} />
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-zinc-500">Incoming challenge</p>
-            <p className="font-display text-lg font-700 text-zinc-100">{truncate(from)}</p>
+            <p className="truncate font-display text-lg font-700 text-zinc-100">{display}</p>
           </div>
         </div>
         <p className="mt-3 text-sm text-zinc-400">

@@ -126,7 +126,9 @@ export class GameRoom {
     this.broadcast({
       t: 'resolved',
       turn,
-      finalState: this.match.board,
+      // Full authoritative match (board + turn + phase) so BOTH clients snap
+      // their turn state — not just the shooter's locally-applied copy.
+      finalState: this.match,
       events: applied.result.events.map((e) =>
         e.type === 'pot'
           ? { type: 'pot', ball: e.ball, pocket: e.pocket }

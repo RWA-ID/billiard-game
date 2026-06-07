@@ -58,31 +58,7 @@ export function PoolCanvas({
       const scale = width / TABLE.width;
       ctx.clearRect(0, 0, width, height);
 
-      // Felt.
-      ctx.fillStyle = '#0d3b2e';
-      roundRect(ctx, 0, 0, width, height, 14 * scale * 0.4);
-      ctx.fill();
-      ctx.save();
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(0, 0, width, height);
-      ctx.restore();
-      // Inner felt highlight.
-      ctx.fillStyle = '#0f4534';
-      ctx.fillRect(4 * scale, 4 * scale, width - 8 * scale, height - 8 * scale);
-
-      // Rails.
-      ctx.strokeStyle = '#3a2c12';
-      ctx.lineWidth = 3 * scale;
-      ctx.strokeRect(2 * scale, 2 * scale, width - 4 * scale, height - 4 * scale);
-
-      // Pockets.
-      for (const [px, py] of POCKETS) {
-        ctx.beginPath();
-        ctx.arc(px * scale, py * scale, TABLE.pocketRadius * scale * 0.9, 0, Math.PI * 2);
-        ctx.fillStyle = '#05140f';
-        ctx.fill();
-      }
+      drawTable(ctx, width, height, scale);
 
       // Balls.
       for (const b of ballsRef.current) {
@@ -262,52 +238,252 @@ function ballColor(id: number): string {
   return solids[base] ?? '#c81e1e';
 }
 
+// Lighten/darken a #rrggbb hex by amt (-1..1) for ball shading.
+function shade(hex: string, amt: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const cl = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  let r = (n >> 16) & 255,
+    g = (n >> 8) & 255,
+    b = n & 255;
+  if (amt >= 0) {
+    r += (255 - r) * amt;
+    g += (255 - g) * amt;
+    b += (255 - b) * amt;
+  } else {
+    r *= 1 + amt;
+    g *= 1 + amt;
+    b *= 1 + amt;
+  }
+  return `rgb(${cl(r)},${cl(g)},${cl(b)})`;
+}
+
 function drawBall(ctx: CanvasRenderingContext2D, b: Ball, scale: number) {
   const r = TABLE.ballRadius * scale;
   const cx = b.x * scale;
   const cy = b.y * scale;
   const stripe = b.id >= 9 && b.id <= 15;
+  const color = ballColor(b.id);
 
   ctx.save();
-  // shadow
+
+  // Contact shadow on the felt.
   ctx.beginPath();
-  ctx.arc(cx + 1.5, cy + 2, r, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.ellipse(cx + r * 0.18, cy + r * 0.42, r * 1.02, r * 0.78, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.38)';
   ctx.fill();
 
-  // body
+  // Base body — radial gradient lit from the upper-left for a glossy sphere.
+  const base = stripe ? '#f3efe4' : color;
+  const grad = ctx.createRadialGradient(
+    cx - r * 0.4,
+    cy - r * 0.45,
+    r * 0.1,
+    cx,
+    cy,
+    r * 1.08,
+  );
+  grad.addColorStop(0, shade(base.startsWith('#') ? base : '#f3efe4', 0.55));
+  grad.addColorStop(0.45, base);
+  grad.addColorStop(1, shade(base.startsWith('#') ? base : '#cfc8b6', -0.45));
+
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = stripe ? '#f4f1ea' : ballColor(b.id);
+  ctx.fillStyle = grad;
   ctx.fill();
 
+  // Stripe band (clip to the ball) with its own shading.
   if (stripe) {
     ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = ballColor(b.id);
-    ctx.fillRect(cx - r, cy - r * 0.45, r * 2, r * 0.9);
+    const bandGrad = ctx.createRadialGradient(
+      cx - r * 0.4,
+      cy - r * 0.45,
+      r * 0.1,
+      cx,
+      cy,
+      r * 1.08,
+    );
+    bandGrad.addColorStop(0, shade(color, 0.5));
+    bandGrad.addColorStop(0.45, color);
+    bandGrad.addColorStop(1, shade(color, -0.4));
+    ctx.fillStyle = bandGrad;
+    ctx.fillRect(cx - r, cy - r * 0.5, r * 2, r);
     ctx.restore();
   }
 
-  // number circle (skip cue)
+  // Number on a white disc (skip cue ball).
   if (b.id !== 0) {
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#fdfdf8';
+    ctx.arc(cx, cy, r * 0.46, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbfaf4';
     ctx.fill();
-    ctx.fillStyle = '#14181a';
-    ctx.font = `${r * 0.7}px ui-sans-serif, sans-serif`;
+    ctx.fillStyle = '#15181a';
+    ctx.font = `600 ${r * 0.62}px ui-sans-serif, system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(String(b.id), cx, cy + 0.5);
+    ctx.fillText(String(b.id), cx, cy + r * 0.04);
   }
 
-  // highlight
+  // Rim shading for roundness.
   ctx.beginPath();
-  ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.25, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.arc(cx, cy, r * 0.98, 0, Math.PI * 2);
+  ctx.lineWidth = r * 0.08;
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.stroke();
+
+  // Specular highlight.
+  const spec = ctx.createRadialGradient(
+    cx - r * 0.34,
+    cy - r * 0.4,
+    0,
+    cx - r * 0.34,
+    cy - r * 0.4,
+    r * 0.7,
+  );
+  spec.addColorStop(0, 'rgba(255,255,255,0.85)');
+  spec.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.beginPath();
+  ctx.arc(cx - r * 0.32, cy - r * 0.36, r * 0.42, 0, Math.PI * 2);
+  ctx.fillStyle = spec;
   ctx.fill();
+
   ctx.restore();
+}
+
+// ── Realistic table: felt gradient, angled cushions w/ pocket jaws, pockets,
+// and diamond sights. Canvas spans exactly the play surface (0..100 × 0..50),
+// matching the physics bounds, so cushions are drawn as an inner lip. ───────
+function drawTable(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  scale: number,
+) {
+  const W = width;
+  const H = height;
+  const pr = TABLE.pocketRadius * scale;
+  const t = 2.4 * scale; // cushion thickness
+  const gap = pr * 1.18; // mouth opening at each pocket
+  const midX = W / 2;
+
+  // Felt bed — radial gradient, lighter at center.
+  const felt = ctx.createRadialGradient(midX, H / 2, H * 0.12, midX, H / 2, W * 0.62);
+  felt.addColorStop(0, '#1c7d5e');
+  felt.addColorStop(1, '#0c4734');
+  ctx.fillStyle = '#0c4734';
+  roundRect(ctx, 0, 0, W, H, 6 * scale);
+  ctx.fill();
+  ctx.fillStyle = felt;
+  roundRect(ctx, 0, 0, W, H, 6 * scale);
+  ctx.fill();
+
+  // Subtle cloth nap streaks.
+  ctx.save();
+  ctx.globalAlpha = 0.05;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 10; i++) {
+    ctx.beginPath();
+    ctx.moveTo((W / 10) * i, 0);
+    ctx.lineTo((W / 10) * i, H);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Cushions (felt rail noses) — trapezoids angled 45° into each pocket mouth.
+  const cushion = (pts: [number, number][]) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = '#0e5740';
+    ctx.fill();
+    // playing-edge highlight
+    ctx.strokeStyle = 'rgba(120,220,180,0.25)';
+    ctx.lineWidth = Math.max(1, scale * 0.18);
+    ctx.stroke();
+  };
+
+  // Top rail: two segments split by the side pocket.
+  cushion([
+    [gap, 0],
+    [midX - gap, 0],
+    [midX - gap - t, t],
+    [gap + t, t],
+  ]);
+  cushion([
+    [midX + gap, 0],
+    [W - gap, 0],
+    [W - gap - t, t],
+    [midX + gap + t, t],
+  ]);
+  // Bottom rail.
+  cushion([
+    [gap, H],
+    [midX - gap, H],
+    [midX - gap - t, H - t],
+    [gap + t, H - t],
+  ]);
+  cushion([
+    [midX + gap, H],
+    [W - gap, H],
+    [W - gap - t, H - t],
+    [midX + gap + t, H - t],
+  ]);
+  // Left rail (no side pocket).
+  cushion([
+    [0, gap],
+    [0, H - gap],
+    [t, H - gap - t],
+    [t, gap + t],
+  ]);
+  // Right rail.
+  cushion([
+    [W, gap],
+    [W, H - gap],
+    [W - t, H - gap - t],
+    [W - t, gap + t],
+  ]);
+
+  // Pockets — leather collar + dark hole.
+  for (const [pxu, pyu] of POCKETS) {
+    const px = pxu * scale;
+    const py = pyu * scale;
+    ctx.beginPath();
+    ctx.arc(px, py, pr * 1.28, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a1712';
+    ctx.fill();
+    const hole = ctx.createRadialGradient(px, py, pr * 0.2, px, py, pr);
+    hole.addColorStop(0, '#000000');
+    hole.addColorStop(1, '#06120d');
+    ctx.beginPath();
+    ctx.arc(px, py, pr * 0.92, 0, Math.PI * 2);
+    ctx.fillStyle = hole;
+    ctx.fill();
+  }
+
+  // Diamond sights on the rails.
+  ctx.fillStyle = 'rgba(245,240,225,0.5)';
+  const diamond = (x: number, y: number) => {
+    const d = Math.max(2, scale * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(x, y - d);
+    ctx.lineTo(x + d, y);
+    ctx.lineTo(x, y + d);
+    ctx.lineTo(x - d, y);
+    ctx.closePath();
+    ctx.fill();
+  };
+  for (const fx of [0.25, 0.75]) {
+    diamond(W * fx, t * 0.5);
+    diamond(W * fx, H - t * 0.5);
+  }
+  for (const fy of [0.25, 0.5, 0.75]) {
+    diamond(t * 0.5, H * fy);
+    diamond(W - t * 0.5, H * fy);
+  }
 }
 
 function roundRect(

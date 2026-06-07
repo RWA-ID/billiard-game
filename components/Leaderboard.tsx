@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { fetchStats } from '@/lib/net/socket';
-import { truncate } from '@/lib/ens/resolve';
-import { Avatar } from './Avatar';
+import { PlayerIdentity } from './PlayerIdentity';
 import { Spinner } from './ui/Spinner';
 
 type Row = {
@@ -74,12 +73,11 @@ export function Leaderboard({ variant = 'full' }: { variant?: 'full' | 'preview'
               key={r.address}
               className="flex items-center justify-between border-t border-ink-line/40 py-2.5"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <span className={`w-4 text-sm font-700 ${RANK_COLORS[i] ?? 'text-zinc-600'}`}>
                   {i + 1}
                 </span>
-                <Avatar address={r.address} avatar={r.avatar} size={30} />
-                <span className="text-sm text-zinc-100">{r.ensName ?? truncate(r.address)}</span>
+                <PlayerIdentity address={r.address} ensName={r.ensName} avatar={r.avatar} size={30} />
               </div>
               <span className="flex items-center gap-8">
                 <span className="w-16 text-right text-sm text-zinc-200">{r.wins.toLocaleString()}</span>
@@ -112,10 +110,13 @@ export function Leaderboard({ variant = 'full' }: { variant?: 'full' | 'preview'
               <tr key={r.address} className="border-b border-ink-line/50 last:border-0">
                 <td className={`px-4 py-3 font-700 ${RANK_COLORS[i] ?? 'text-zinc-600'}`}>{i + 1}</td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar address={r.address} avatar={r.avatar} size={30} />
-                    <span className="text-zinc-100">{r.ensName ?? truncate(r.address)}</span>
-                  </div>
+                  <PlayerIdentity
+                    address={r.address}
+                    ensName={r.ensName}
+                    avatar={r.avatar}
+                    size={30}
+                    nameClassName="text-zinc-100"
+                  />
                 </td>
                 <td className="px-4 py-3 text-right text-emerald-400">{r.wins}</td>
                 <td className="px-4 py-3 text-right text-zinc-400">{r.losses}</td>
