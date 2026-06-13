@@ -45,6 +45,30 @@ type XmtpDm = {
 };
 type XmtpMessage = { id: string; content: unknown; senderInboxId: string; sentAtNs: bigint };
 
+// Building the XMTP client occasionally stalls before the wallet ever shows the
+// signature prompt (a lost WalletConnect request, an OPFS/IndexedDB lock held by
+// another open tab, or an unsupported wallet). Without a deadline the UI sits on
+// "Enabling…" forever, so we race the build against this timeout.
+const ENABLE_TIMEOUT_MS = 60_000;
+const ENABLE_TIMEOUT_MSG =
+  'Enabling timed out. Check your wallet for a pending signature request, close any other billiard.eth tabs, then try again.';
+
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 // ── Shared singleton state ──────────────────────────────────────────────────
 let sharedClient: XmtpClient | null = null;
 let sharedAddress = ''; // lowercased wallet address the client was built for
@@ -146,7 +170,15 @@ export function useXmtp() {
           createPromise = null;
         });
       }
-      await createPromise;
+      const pending = createPromise;
+      try {
+        await withTimeout(pending, ENABLE_TIMEOUT_MS, ENABLE_TIMEOUT_MSG);
+      } catch (err) {
+        // If this attempt stalled (and is still the in-flight one), drop it so the
+        // next enable() builds a fresh client instead of re-awaiting a hung promise.
+        if (createPromise === pending) createPromise = null;
+        throw err;
+      }
       setReady(true);
       emit();
     } catch (e) {

@@ -76,13 +76,18 @@ export function evaluateShot(
     const myGroup = t.groups[t.current];
     if (myGroup) {
       const fcGroup = ballGroup(result.firstContact);
-      const clearedMyGroup = remainingOf(myGroup) === 0;
-      // If my group is cleared, I'm on the 8 — must hit the 8 first.
-      const legalFirst = clearedMyGroup ? result.firstContact === 8 : fcGroup === myGroup;
+      // Judge first contact on the table BEFORE this shot. `remainingOf` counts
+      // balls left AFTER the shot, so potting your own LAST group ball would
+      // make it read 0 and wrongly demand you'd hit the 8 first — add those
+      // balls back to know whether you were already on the 8 when you shot.
+      const myGroupPotted = pot.filter((b) => ballGroup(b) === myGroup).length;
+      const onEightBeforeShot = remainingOf(myGroup) + myGroupPotted === 0;
+      // If I was already on the 8, I must hit the 8 first; otherwise my group.
+      const legalFirst = onEightBeforeShot ? result.firstContact === 8 : fcGroup === myGroup;
       if (!legalFirst) {
         foul = true;
         const hit = result.firstContact === 8 ? 'the 8-ball' : fcGroup ?? 'another ball';
-        foulReason = clearedMyGroup
+        foulReason = onEightBeforeShot
           ? `must hit the 8-ball first (hit ${hit})`
           : `must hit ${myGroup} first (hit ${hit})`;
       }
