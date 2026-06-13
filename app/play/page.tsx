@@ -55,7 +55,6 @@ export default function PlayPage() {
   // In-match XMTP chat with the opponent (multiplayer only).
   const { enable, ready: chatReady, connecting: chatConnecting, error: chatError, openConversation } =
     useXmtp();
-  const [showChat, setShowChat] = useState(false);
 
   // Sound preference + unlock on the first gesture anywhere on the page, so
   // the waiting (non-shooting) player hears the opponent's break too.
@@ -86,6 +85,8 @@ export default function PlayPage() {
   // My player index: breaker = 0.
   const myIndex: 0 | 1 = ctx ? (ctx.youBreak ? 0 : 1) : 0;
   const hotSeat = !ctx;
+  // Show the docked chat sidebar only in a real (multiplayer) match.
+  const showSidebar = !hotSeat && !!ctx;
   // In multiplayer, don't allow a shot until the DO has confirmed both players
   // joined (the `start` message) — otherwise the breaker could fire into a room
   // the opponent hasn't entered yet, and the shot would be dropped server-side.
@@ -233,7 +234,7 @@ export default function PlayPage() {
   return (
     <main className="min-h-screen">
       <WalletBar />
-      <div className="mx-auto max-w-5xl px-3 py-4 sm:px-4 sm:py-6">
+      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
         {/* ── Scoreboard ── */}
         <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-4">
           <PlayerCard
@@ -313,80 +314,77 @@ export default function PlayPage() {
           </div>
         )}
 
-        {match && (
-          <PoolCanvas
-            board={match.board}
-            myTurn={myTurn}
-            onShoot={onShoot}
-            ballInHand={ballInHand}
-            onPlaceCue={placeCue}
-            needCall={needCall}
-            calledPocket={calledPocket}
-            onCallPocket={setCalledPocket}
-            remoteShot={remoteShot}
-          />
-        )}
+        <div
+          className={clsx(
+            'grid items-start gap-4',
+            showSidebar && 'lg:grid-cols-[minmax(0,1fr)_330px]',
+          )}
+        >
+          {/* Table column */}
+          <div className="min-w-0">
+            {match && (
+              <PoolCanvas
+                board={match.board}
+                myTurn={myTurn}
+                onShoot={onShoot}
+                ballInHand={ballInHand}
+                onPlaceCue={placeCue}
+                needCall={needCall}
+                calledPocket={calledPocket}
+                onCallPocket={setCalledPocket}
+                remoteShot={remoteShot}
+              />
+            )}
 
-        {status && (
-          <p key={status} className="toast-in mt-3 text-center text-sm text-brass-light">
-            {status}
-          </p>
-        )}
+            {status && (
+              <p key={status} className="toast-in mt-3 text-center text-sm text-brass-light">
+                {status}
+              </p>
+            )}
+          </div>
 
-        {/* In-match chat with the opponent (multiplayer only). */}
-        {!hotSeat && ctx && (
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => {
-                setShowChat((v) => !v);
-                if (!chatReady && !chatConnecting) void enable();
-              }}
-              className="flex w-full items-center justify-between rounded-2xl border border-ink-line bg-ink-card/60 px-4 py-3 text-left text-sm font-600 text-zinc-200 transition hover:border-sage/40"
-            >
-              <span className="flex items-center gap-2">
-                <ChatIcon />
-                Chat with {opponentName || 'opponent'}
-              </span>
-              <span className="text-xs text-zinc-500">{showChat ? 'Hide' : 'Open'}</span>
-            </button>
-
-            {showChat && (
-              <div className="mt-3">
-                {chatReady ? (
-                  <ChatPanel
-                    peer={{
-                      address: ctx.opponent.address as Address,
-                      display: opponentName || 'Opponent',
-                      avatar: ctx.opponent.avatar ?? null,
-                    }}
-                    openConversation={openConversation}
-                  />
-                ) : (
-                  <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-6 text-center">
+          {/* Chat column — docked to the right of the table (multiplayer only). */}
+          {showSidebar && (
+            <aside className="lg:h-full lg:min-h-[420px]">
+              {chatReady ? (
+                <ChatPanel
+                  compact
+                  peer={{
+                    address: ctx.opponent.address as Address,
+                    display: opponentName || 'Opponent',
+                    avatar: ctx.opponent.avatar ?? null,
+                  }}
+                  openConversation={openConversation}
+                />
+              ) : (
+                <div className="flex h-full min-h-[320px] flex-col rounded-2xl border border-ink-line bg-ink-card/60 p-5 text-center">
+                  <div className="flex items-center gap-2 text-left">
+                    <ChatIcon />
+                    <span className="text-sm font-600 text-zinc-200">Match chat</span>
+                  </div>
+                  <div className="flex flex-1 flex-col items-center justify-center">
                     <p className="text-sm text-zinc-400">
-                      Messages are end-to-end encrypted over{' '}
-                      <span className="text-sage-bright">XMTP</span>. Enable it once with a
-                      signature to chat during the match.
+                      Chat with your opponent, end-to-end encrypted over{' '}
+                      <span className="text-sage-bright">XMTP</span>. Enable once with a signature.
                     </p>
-                    <div className="mt-4 flex justify-center">
+                    <div className="mt-4">
                       <Button onClick={() => void enable()} disabled={chatConnecting}>
                         {chatConnecting ? (
                           <>
                             <Spinner size={14} /> Enabling…
                           </>
                         ) : (
-                          'Enable messaging'
+                          'Enable chat'
                         )}
                       </Button>
                     </div>
                     {chatError && <p className="mt-2 text-xs text-red-400">{chatError}</p>}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                </div>
+              )}
+            </aside>
+          )}
+        </div>
 
         {opponentLeft && !over && (
           <div className="overlay-in mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-ink-card/80 p-8 text-center shadow-brass backdrop-blur">
