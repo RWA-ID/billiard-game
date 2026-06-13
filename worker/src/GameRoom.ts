@@ -25,6 +25,10 @@ import type { Env } from './index';
 
 type Seat = { ws: WebSocket; player: PlayerInfo; breaker: boolean };
 
+// How long a mid-match disconnect waits for the player to reconnect before it
+// counts as a resignation. The client reconnects with 1s→10s backoff.
+const RECONNECT_GRACE_MS = 15_000;
+
 export class GameRoom {
   private seats: Seat[] = []; // index 0 = breaker
   private match: Match | null = null;
@@ -278,13 +282,27 @@ export class GameRoom {
   }
 
   private onLeave(ws: WebSocket) {
-    const idx = this.seats.findIndex((s) => s.ws === ws);
-    if (idx === -1) return;
-    if (this.match && this.match.turn.winner === null && this.started) {
-      // Treat mid-match disconnect as a resignation.
-      this.onResign(ws);
-    }
-    this.broadcast({ t: 'opponent-left' });
+    const seat = this.seats.find((s) => s.ws === ws);
+    if (!seat) return;
+    // Pre-game or already decided: nothing to adjudicate.
+    if (!this.started || !this.match || this.match.turn.winner !== null) return;
+
+    // Don't end the match on a transient drop. The client auto-reconnects with
+    // backoff and re-joins (which swaps this seat's ws). Only resign if THIS dead
+    // socket is still the seat's socket after a grace window — i.e. the player
+    // never came back. Fixes games ending on a wifi blip / display sleep / churn.
+    const addr = seat.player.address.toLowerCase();
+    this.state.waitUntil(
+      (async () => {
+        await new Promise((r) => setTimeout(r, RECONNECT_GRACE_MS));
+        const cur = this.seats.find((s) => s.player.address.toLowerCase() === addr);
+        if (!cur || cur.ws !== ws) return; // reconnected with a fresh socket
+        if (this.match && this.match.turn.winner === null) {
+          this.broadcast({ t: 'opponent-left' });
+          this.onResign(ws);
+        }
+      })(),
+    );
   }
 
   private broadcast(msg: RoomServerMsg) {

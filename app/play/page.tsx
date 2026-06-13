@@ -234,7 +234,7 @@ export default function PlayPage() {
   return (
     <main className="min-h-screen">
       <WalletBar />
-      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
+      <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6">
         {/* ── Scoreboard ── */}
         <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-4">
           <PlayerCard
@@ -317,7 +317,7 @@ export default function PlayPage() {
         <div
           className={clsx(
             'grid items-start gap-4',
-            showSidebar && 'lg:grid-cols-[minmax(0,1fr)_330px]',
+            showSidebar && 'lg:grid-cols-[minmax(0,1fr)_280px]',
           )}
         >
           {/* Table column */}

@@ -170,44 +170,44 @@ export default function Home() {
         )}
       </section>
 
-      {/* ── ENS identity (always visible) ────────────────────────────────── */}
-      <section ref={ensRef} id="register" className="mx-auto max-w-3xl scroll-mt-20 px-5 pb-12">
-        <div className="mb-5 text-center">
-          <h2 className="font-serif text-3xl font-700 text-cream">Your ENS identity</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Register a <span className="text-sage-bright">.eth</span> name, set your avatar and bio,
-            and make it your primary name. Optional — guests can still play and rank.
-          </p>
-        </div>
-        <EnsNameCard />
-      </section>
-
-      {/* ── Powered by ENS ───────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-6xl px-5 pb-12">
-        <div className="flex flex-col items-start justify-between gap-6 rounded-2xl border border-ink-line bg-gradient-to-br from-ink-card to-ink-soft p-7 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-4">
-            <EnsLogo size={44} />
-            <div>
-              <h4 className="font-serif text-xl font-700 text-cream">Powered by ENS</h4>
-              <p className="mt-1 text-sm text-zinc-400">
-                Decentralized identity. Seamless discovery. The future of online gaming.
+      {/* ── ENS identity · Powered-by-ENS · Donate (side by side) ─────────── */}
+      <section className="mx-auto max-w-6xl px-5 pb-14">
+        <div className="grid items-start gap-6 lg:grid-cols-[1fr_minmax(0,360px)]">
+          {/* Left: register / manage ENS */}
+          <div ref={ensRef} id="register" className="scroll-mt-20">
+            <div className="mb-5">
+              <h2 className="font-serif text-3xl font-700 text-cream">Your ENS identity</h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Register a <span className="text-sage-bright">.eth</span> name, set your avatar and
+                bio, and make it your primary name. Optional — guests can still play and rank.
               </p>
             </div>
+            <EnsNameCard />
           </div>
-          <a
-            href="https://ens.domains"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl border border-ink-line bg-ink/60 px-5 py-3 text-sm font-500 text-zinc-200 transition hover:border-sage/40"
-          >
-            Learn More About ENS ↗
-          </a>
-        </div>
-      </section>
 
-      {/* ── Donate ───────────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-6xl px-5 pb-14">
-        <DonateCard />
+          {/* Right rail: Powered-by-ENS pill + donate */}
+          <div className="flex flex-col gap-6">
+            <div className="rounded-2xl border border-ink-line bg-gradient-to-br from-ink-card to-ink-soft p-6">
+              <div className="flex items-center gap-3">
+                <EnsLogo size={40} />
+                <h4 className="font-serif text-xl font-700 text-cream">Powered by ENS</h4>
+              </div>
+              <p className="mt-3 text-sm text-zinc-400">
+                Decentralized identity. Seamless discovery. The future of online gaming.
+              </p>
+              <a
+                href="https://ens.domains"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-ink-line bg-ink/60 px-4 py-2.5 text-sm font-500 text-zinc-200 transition hover:border-sage/40"
+              >
+                Learn More About ENS ↗
+              </a>
+            </div>
+
+            <DonateCard />
+          </div>
+        </div>
       </section>
 
       <SiteFooter />
