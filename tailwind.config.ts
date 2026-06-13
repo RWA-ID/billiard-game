@@ -39,8 +39,10 @@ const config: Config = {
       },
       boxShadow: {
         sage: '0 0 30px rgba(139, 195, 148, 0.25)',
+        brass: '0 0 30px rgba(217, 164, 65, 0.22)',
         card: '0 18px 50px -20px rgba(0, 0, 0, 0.7)',
         felt: 'inset 0 0 120px rgba(0, 0, 0, 0.55)',
+        table: '0 30px 80px -24px rgba(0, 0, 0, 0.85), 0 10px 32px rgba(0, 0, 0, 0.5)',
       },
       keyframes: {
         floaty: {

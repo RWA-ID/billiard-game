@@ -67,11 +67,14 @@ export type GameState = {
   rackSeed: number;
 };
 
+// `step` (sim step index) and `speed` (impact strength, table units/s) are
+// RENDER-ONLY metadata for animation/sound timing — they never affect the
+// simulation result and are stripped from the wire protocol by the DO.
 export type SimEvent =
-  | { type: 'pot'; ball: number; pocket: number }
-  | { type: 'cushion'; ball: number }
-  | { type: 'collision'; a: number; b: number }
-  | { type: 'first-contact'; ball: number }; // first ball the cue touched
+  | { type: 'pot'; ball: number; pocket: number; step?: number }
+  | { type: 'cushion'; ball: number; step?: number; speed?: number }
+  | { type: 'collision'; a: number; b: number; step?: number; speed?: number }
+  | { type: 'first-contact'; ball: number; step?: number }; // first ball the cue touched
 
 export type SimResult = {
   finalState: GameState;
@@ -235,12 +238,12 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
             a.vy -= imp * ny;
             b.vx += imp * nx;
             b.vy += imp * ny;
-            events.push({ type: 'collision', a: a.id, b: b.id });
+            events.push({ type: 'collision', a: a.id, b: b.id, step, speed: -velN });
             // Track first ball the cue contacts.
             if ((a.id === 0 || b.id === 0) && firstContact === null) {
               const other = a.id === 0 ? b.id : a.id;
               firstContact = other;
-              events.push({ type: 'first-contact', ball: other });
+              events.push({ type: 'first-contact', ball: other, step });
             }
           }
         }
@@ -257,7 +260,7 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
           b.pocket = p;
           b.vx = 0;
           b.vy = 0;
-          events.push({ type: 'pot', ball: b.id, pocket: p });
+          events.push({ type: 'pot', ball: b.id, pocket: p, step });
           break;
         }
       }
@@ -268,15 +271,18 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
     for (const b of s.balls) {
       if (b.potted) continue;
       let hit = false;
+      let impact = 0;
       const openSide = nearAny(b.y, Y_POCKETS); // left/right rails open near corners
       const openEnd = nearAny(b.x, X_POCKETS); //  top/bottom rails open near pockets
       if (!openSide) {
         if (b.x < r) {
           b.x = r;
+          impact = Math.max(impact, Math.abs(b.vx));
           b.vx = Math.abs(b.vx) * PHYS.cushionRestitution;
           hit = true;
         } else if (b.x > TABLE.width - r) {
           b.x = TABLE.width - r;
+          impact = Math.max(impact, Math.abs(b.vx));
           b.vx = -Math.abs(b.vx) * PHYS.cushionRestitution;
           hit = true;
         }
@@ -284,16 +290,18 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
       if (!openEnd) {
         if (b.y < r) {
           b.y = r;
+          impact = Math.max(impact, Math.abs(b.vy));
           b.vy = Math.abs(b.vy) * PHYS.cushionRestitution;
           hit = true;
         } else if (b.y > TABLE.height - r) {
           b.y = TABLE.height - r;
+          impact = Math.max(impact, Math.abs(b.vy));
           b.vy = -Math.abs(b.vy) * PHYS.cushionRestitution;
           hit = true;
         }
       }
       if (hit) {
-        events.push({ type: 'cushion', ball: b.id });
+        events.push({ type: 'cushion', ball: b.id, step, speed: impact });
         if (firstContact !== null) cushionAfterContact = true;
       }
     }
@@ -316,7 +324,7 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
         b.pocket = best;
         b.vx = 0;
         b.vy = 0;
-        events.push({ type: 'pot', ball: b.id, pocket: best });
+        events.push({ type: 'pot', ball: b.id, pocket: best, step });
       }
     }
   }

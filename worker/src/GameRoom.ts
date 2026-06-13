@@ -163,6 +163,10 @@ export class GameRoom {
               : { type: 'turn-pass' },
       ),
       nextTurn: this.currentAddress() ?? this.seats[0].player.address,
+      // Echo the shot so the opponent's client can animate the same
+      // deterministic sim locally before snapping to this final state.
+      input,
+      by: shooter.player.address,
     });
 
     if (this.match.turn.winner !== null) {

@@ -4,16 +4,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignMessage } from 'wagmi';
 import { WalletBar } from '@/components/WalletBar';
-import { PoolCanvas } from '@/components/PoolCanvas';
+import { PoolCanvas, type RemoteShot } from '@/components/PoolCanvas';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/Avatar';
+import { clsx } from '@/components/ui/clsx';
 import { useIdentity } from '@/lib/wallet/useIdentity';
 import { useRoom } from '@/lib/net/useRoom';
 import { applyShot, newMatch, placeCueBall, type Match } from '@/lib/game/state';
 import { hashState, type ShotInput } from '@/lib/game/physics';
 import { resultMessage } from '@/lib/crypto/sign';
 import { useEnsProfile } from '@/lib/ens/useEnsProfile';
+import { isMuted, setMuted, sfxLose, sfxWin, unlockAudio } from '@/lib/sound/sfx';
 import type { Matched, ResultPayload, RoomServerMsg } from '@/lib/net/protocol';
 
 /**
@@ -32,6 +33,11 @@ export default function PlayPage() {
   const [status, setStatus] = useState('');
   const [opponentLeft, setOpponentLeft] = useState(false);
   const [started, setStarted] = useState(false);
+  const [remoteShot, setRemoteShot] = useState<RemoteShot | null>(null);
+  const [muted, setMutedState] = useState(true);
+  // Result overlay is delayed so the winning shot finishes animating first.
+  const [overlayReady, setOverlayReady] = useState(false);
+  const lastShotAtRef = useRef(0);
 
   // Latest message handler, read from a ref so useRoom never re-subscribes.
   const handlerRef = useRef<(msg: RoomServerMsg) => void>(() => {});
@@ -41,6 +47,15 @@ export default function PlayPage() {
     (msg) => handlerRef.current(msg),
   );
   const [calledPocket, setCalledPocket] = useState<number | null>(null);
+
+  // Sound preference + unlock on the first gesture anywhere on the page, so
+  // the waiting (non-shooting) player hears the opponent's break too.
+  useEffect(() => {
+    setMutedState(isMuted());
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock);
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
 
   // Load the match context the lobby stashed (or fall back to local hot-seat).
   useEffect(() => {
@@ -114,6 +129,17 @@ export default function PlayPage() {
       const auth = msg.finalState as Match;
       setStarted(true); // a resolved snapshot also confirms the match is live
       setMatch(auth);
+      // If the OPPONENT shot, replay the deterministic sim as an animation
+      // (PoolCanvas snaps to the authoritative board when it finishes).
+      if (
+        msg.input &&
+        msg.by &&
+        identity &&
+        msg.by.toLowerCase() !== identity.address.toLowerCase()
+      ) {
+        lastShotAtRef.current = Date.now();
+        setRemoteShot({ input: msg.input, seq: msg.turn });
+      }
     } else if (msg.t === 'gameover') {
       // Drive the local match to "over" so the result overlay shows on the
       // client that didn't make the winning move (incl. opponent resignations).
@@ -166,8 +192,24 @@ export default function PlayPage() {
   }
 
   const over = match?.phase === 'over';
-  const youWon =
-    over && match && ctx && match.turn.winner === myIndex;
+  const youWon = over && match && ctx && match.turn.winner === myIndex;
+
+  // Let a just-animated winning shot play out before covering the table.
+  useEffect(() => {
+    if (!over) {
+      setOverlayReady(false);
+      return;
+    }
+    const sinceShot = Date.now() - lastShotAtRef.current;
+    const delay = sinceShot < 1500 ? 2600 : 450;
+    const t = setTimeout(() => {
+      setOverlayReady(true);
+      if (hotSeat || youWon) sfxWin();
+      else sfxLose();
+    }, delay);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [over]);
 
   const turnLabel = useMemo(() => {
     if (!match) return '';
@@ -177,54 +219,88 @@ export default function PlayPage() {
     return myTurn ? 'Your shot' : "Opponent's shot";
   }, [match, myTurn, hotSeat, started]);
 
+  const oppActive = !!match && match.phase !== 'over' && !myTurn && (started || hotSeat);
+
   return (
     <main className="min-h-screen">
       <WalletBar />
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        {/* Match header */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {identity && <Avatar address={identity.address} avatar={identity.avatar} size={34} />}
-            <div>
-              <p className="font-display font-700 text-zinc-100">{turnLabel}</p>
-              <p className="text-xs text-zinc-500">
-                {hotSeat
-                  ? 'Local practice table'
-                  : ctx
-                    ? `vs ${opponentName} · ${connected ? 'connected' : 'connecting…'}`
-                    : ''}
-              </p>
+      <div className="mx-auto max-w-5xl px-3 py-4 sm:px-4 sm:py-6">
+        {/* ── Scoreboard ── */}
+        <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-4">
+          <PlayerCard
+            name={hotSeat ? 'Player 1' : (identity?.display ?? 'You')}
+            address={hotSeat ? '0xP1' : (identity?.address ?? '0xP1')}
+            avatar={hotSeat ? null : identity?.avatar}
+            active={hotSeat ? match?.turn.current === 0 : myTurn}
+            match={match}
+            seat={hotSeat ? 0 : myIndex}
+          />
+
+          <div className="flex flex-col items-center justify-center gap-1.5 px-1">
+            <span
+              className={clsx(
+                'whitespace-nowrap rounded-full border px-3 py-1 text-xs font-600 sm:px-4 sm:text-sm',
+                myTurn
+                  ? 'border-sage/50 bg-sage/10 text-sage-bright shadow-sage'
+                  : !started && !hotSeat && !over
+                    ? 'animate-glow border-brass/40 bg-brass/5 text-brass-light'
+                    : 'border-ink-line bg-ink-card/70 text-zinc-300',
+              )}
+            >
+              {turnLabel}
+            </span>
+            <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+              {!hotSeat && (
+                <span className="flex items-center gap-1">
+                  <span
+                    className={clsx(
+                      'h-1.5 w-1.5 rounded-full',
+                      connected ? 'bg-sage-bright' : 'bg-brass animate-glow',
+                    )}
+                  />
+                  {connected ? 'live' : 'connecting…'}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  unlockAudio();
+                  const next = !muted;
+                  setMuted(next);
+                  setMutedState(next);
+                }}
+                className="rounded p-0.5 text-zinc-400 transition hover:text-zinc-100"
+                aria-label={muted ? 'Unmute sounds' : 'Mute sounds'}
+                title={muted ? 'Unmute sounds' : 'Mute sounds'}
+              >
+                {muted ? <MutedIcon /> : <SoundIcon />}
+              </button>
+              <button
+                type="button"
+                onClick={leaveTable}
+                className="text-zinc-400 underline-offset-2 transition hover:text-zinc-100 hover:underline"
+              >
+                Leave
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {match && <GroupBadges match={match} myIndex={myIndex} hotSeat={hotSeat} />}
-            <Button variant="ghost" onClick={leaveTable}>
-              Leave
-            </Button>
-          </div>
+
+          <PlayerCard
+            right
+            name={hotSeat ? 'Player 2' : opponentName || 'Opponent'}
+            address={hotSeat ? '0xP2' : (ctx?.opponent.address ?? '0xP2')}
+            avatar={hotSeat ? null : ctx?.opponent.avatar}
+            active={hotSeat ? match?.turn.current === 1 : oppActive}
+            match={match}
+            seat={hotSeat ? 1 : myIndex === 0 ? 1 : 0}
+          />
         </div>
 
         {needCall && (
-          <div className="mb-3 rounded-xl border border-sage/40 bg-sage/5 p-3">
-            <p className="mb-2 text-center text-sm font-600 text-sage-bright">
-              You&apos;re on the 8 — call your pocket:
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {POCKET_LABELS.map((label, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCalledPocket(i)}
-                  className={
-                    'rounded-lg border px-2 py-1.5 text-xs font-500 transition ' +
-                    (calledPocket === i
-                      ? 'border-sage bg-sage/15 text-sage-bright'
-                      : 'border-ink-line text-zinc-300 hover:border-sage/40')
-                  }
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div className="mb-3 rounded-xl border border-sage/40 bg-sage/5 px-3 py-2 text-center text-sm font-600 text-sage-bright">
+            {calledPocket == null
+              ? 'You’re on the 8 — tap a pocket on the table to call it, then shoot.'
+              : `Calling the ${POCKET_LABELS[calledPocket]} pocket — take your shot.`}
           </div>
         )}
 
@@ -237,15 +313,19 @@ export default function PlayPage() {
             onPlaceCue={placeCue}
             needCall={needCall}
             calledPocket={calledPocket}
+            onCallPocket={setCalledPocket}
+            remoteShot={remoteShot}
           />
         )}
 
         {status && (
-          <p className="mt-3 text-center text-sm text-brass-light">{status}</p>
+          <p key={status} className="toast-in mt-3 text-center text-sm text-brass-light">
+            {status}
+          </p>
         )}
 
         {opponentLeft && !over && (
-          <div className="mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-ink-card/70 p-8 text-center shadow-brass">
+          <div className="overlay-in mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-ink-card/80 p-8 text-center shadow-brass backdrop-blur">
             <p className="font-display text-2xl font-700 text-zinc-50">Opponent left</p>
             <p className="mt-1 text-sm text-zinc-400">
               Your opponent disconnected from the table.
@@ -256,17 +336,27 @@ export default function PlayPage() {
           </div>
         )}
 
-        {over && (
-          <div className="mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-ink-card/70 p-8 text-center shadow-brass">
-            <p className="font-display text-2xl font-700 text-zinc-50">
+        {over && overlayReady && (
+          <div className="overlay-in mt-6 grid place-items-center rounded-2xl border border-ink-line bg-ink-card/80 p-8 text-center shadow-card backdrop-blur">
+            <span
+              className={clsx(
+                'grid h-16 w-16 place-items-center rounded-full text-3xl',
+                hotSeat || youWon
+                  ? 'bg-sage/15 ring-2 ring-sage/50 shadow-sage'
+                  : 'bg-ink ring-2 ring-ink-line',
+              )}
+            >
+              {hotSeat || youWon ? '🏆' : '🎱'}
+            </span>
+            <p className="mt-4 font-serif text-3xl font-700 text-cream">
               {hotSeat
                 ? `Player ${(match!.turn.winner ?? 0) + 1} wins`
                 : youWon
-                  ? 'You win 🎉'
+                  ? 'You win'
                   : 'You lost'}
             </p>
             <p className="mt-1 text-sm text-zinc-400">{match!.turn.reason}</p>
-            <div className="mt-5 flex gap-2">
+            <div className="mt-6 flex gap-2">
               <Button onClick={() => router.push('/')}>Back to lobby</Button>
               <Button variant="secondary" onClick={() => router.push('/stats')}>
                 Leaderboard
@@ -279,18 +369,119 @@ export default function PlayPage() {
   );
 }
 
-function GroupBadges({
+// ── Scoreboard player card ──────────────────────────────────────────────────
+function PlayerCard({
+  name,
+  address,
+  avatar,
+  active,
   match,
-  myIndex,
-  hotSeat,
+  seat,
+  right = false,
 }: {
-  match: Match;
-  myIndex: 0 | 1;
-  hotSeat: boolean;
+  name: string;
+  address: string;
+  avatar?: string | null;
+  active?: boolean;
+  match: Match | null;
+  seat: 0 | 1;
+  right?: boolean;
 }) {
-  if (match.turn.open) return <Badge tone="neutral">open table</Badge>;
-  const mine = match.turn.groups[myIndex];
-  return <Badge tone="neutral">{hotSeat ? 'groups assigned' : `you: ${mine}`}</Badge>;
+  const group = match && !match.turn.open ? match.turn.groups[seat] : null;
+  const remaining = group
+    ? match!.board.balls.filter((b) => inGroup(b.id, group) && !b.potted).map((b) => b.id)
+    : null;
+  const onEight = remaining !== null && remaining.length === 0;
+
+  return (
+    <div
+      className={clsx(
+        'flex min-w-0 items-center gap-2.5 rounded-2xl border bg-ink-card/70 px-3 py-2 transition-all sm:px-4 sm:py-2.5',
+        right && 'flex-row-reverse text-right',
+        active ? 'border-sage/60 shadow-sage' : 'border-ink-line',
+      )}
+    >
+      <span className={clsx('relative shrink-0', active && 'turn-ring rounded-full')}>
+        <Avatar address={address} avatar={avatar} size={36} />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-600 text-zinc-100">{name}</p>
+        <div
+          className={clsx(
+            'mt-1 flex items-center gap-1',
+            right && 'flex-row-reverse',
+          )}
+        >
+          {remaining === null ? (
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+              {match?.turn.open ? 'open table' : '—'}
+            </span>
+          ) : onEight ? (
+            <>
+              <BallDot id={8} />
+              <span className="text-[10px] uppercase tracking-wide text-brass-light">on the 8</span>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] uppercase tracking-wide text-zinc-500">{group}</span>
+              {remaining.map((id) => (
+                <BallDot key={id} id={id} />
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const BALL_HEX: Record<number, string> = {
+  1: '#e8b00a',
+  2: '#1d4fc4',
+  3: '#cc2418',
+  4: '#522a8c',
+  5: '#e06a14',
+  6: '#187a40',
+  7: '#8c2030',
+  8: '#14171a',
+};
+
+function BallDot({ id }: { id: number }) {
+  const stripe = id >= 9;
+  const hue = BALL_HEX[stripe ? id - 8 : id] ?? '#cc2418';
+  return (
+    <span
+      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/40"
+      style={{
+        background: stripe
+          ? `linear-gradient(to bottom, #f4f0e5 22%, ${hue} 22%, ${hue} 78%, #f4f0e5 78%)`
+          : hue,
+      }}
+      title={`${id}`}
+    />
+  );
+}
+
+function SoundIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor" />
+      <path
+        d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+function MutedIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor" />
+      <path d="m16 9 6 6m0-6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function buildResult(match: Match, ctx: Matched | null): ResultPayload {
@@ -310,12 +501,12 @@ function buildResult(match: Match, ctx: Matched | null): ResultPayload {
 
 // Pocket index → human label, matching physics.POCKETS order.
 const POCKET_LABELS = [
-  'Top-left',
-  'Top-middle',
-  'Top-right',
-  'Bottom-left',
-  'Bottom-middle',
-  'Bottom-right',
+  'top-left',
+  'top-middle',
+  'top-right',
+  'bottom-left',
+  'bottom-middle',
+  'bottom-right',
 ];
 
 function inGroup(id: number, group: 'solids' | 'stripes' | null): boolean {

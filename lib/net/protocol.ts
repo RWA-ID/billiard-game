@@ -80,8 +80,19 @@ export type RoomClientMsg =
 
 export type RoomServerMsg =
   | { t: 'start'; rackSeed: number; turnAddress: Address }
-  // Authoritative simulation result the clients animate to.
-  | { t: 'resolved'; turn: number; finalState: unknown; events: ShotEvent[]; nextTurn: Address }
+  // Authoritative simulation result the clients animate to. `input`/`by` echo
+  // the shot that produced it (absent for cue placement / reconnect snapshots)
+  // so the NON-shooting client can replay the deterministic sim as an
+  // animation instead of snapping straight to the final board.
+  | {
+      t: 'resolved';
+      turn: number;
+      finalState: unknown;
+      events: ShotEvent[];
+      nextTurn: Address;
+      input?: ShotInput;
+      by?: Address;
+    }
   | { t: 'turn'; turnAddress: Address; ballInHand: boolean }
   | { t: 'gameover'; winner: Address; loser: Address; reason: string; resultPayload: ResultPayload }
   | { t: 'desync'; turn: number }

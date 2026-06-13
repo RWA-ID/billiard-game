@@ -61,13 +61,13 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button
               onClick={scrollToLobby}
-              className="rounded-xl bg-sage px-7 py-3.5 text-sm font-600 text-ink shadow-sage transition hover:bg-sage-bright"
+              className="rounded-xl bg-sage px-7 py-3.5 text-sm font-600 text-ink shadow-sage transition hover:-translate-y-0.5 hover:bg-sage-bright hover:shadow-lg active:translate-y-0"
             >
               Play Now
             </button>
             <a
               href="#how"
-              className="inline-flex items-center gap-2 rounded-xl border border-ink-line bg-ink-card/60 px-6 py-3.5 text-sm font-500 text-zinc-200 transition hover:border-sage/40"
+              className="inline-flex items-center gap-2 rounded-xl border border-ink-line bg-ink-card/60 px-6 py-3.5 text-sm font-500 text-zinc-200 transition hover:-translate-y-0.5 hover:border-sage/40 active:translate-y-0"
             >
               <PlayIcon /> How it Works
             </a>
@@ -82,13 +82,14 @@ export default function Home() {
         {/* Table photo */}
         <div className="relative h-[300px] sm:h-[380px] lg:h-[520px]">
           <OnlinePill connected={connected} count={players.length} players={players} />
-          <div className="absolute inset-0 animate-floaty overflow-hidden rounded-3xl border border-ink-line/80 shadow-2xl ring-1 ring-sage/10">
+          <div className="absolute inset-0 animate-floaty overflow-hidden rounded-3xl border border-ink-line/80 shadow-table ring-1 ring-sage/10">
             <img
               src="/hero-table.jpg"
               alt="A felt pool table racked and waiting in a dim bar"
               className="h-full w-full object-cover"
             />
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent to-transparent" />
+            {/* warm lamp spill from above + grounding shadow below */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent to-brass/10" />
           </div>
         </div>
       </section>
@@ -304,8 +305,8 @@ function OnlinePill({
 // ── Feature card ──────────────────────────────────────────────────────────
 function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
-    <div className="flex flex-col items-center px-6 py-4 text-center sm:border-r sm:border-ink-line/60 sm:last:border-r-0">
-      <div className="grid h-12 w-12 place-items-center rounded-xl border border-ink-line bg-ink-card text-sage-bright">
+    <div className="group flex flex-col items-center rounded-2xl px-6 py-5 text-center transition hover:-translate-y-0.5 hover:bg-ink-card/50 sm:border-r sm:border-ink-line/60 sm:last:border-r-0">
+      <div className="grid h-12 w-12 place-items-center rounded-xl border border-ink-line bg-ink-card text-sage-bright transition group-hover:border-sage/40 group-hover:shadow-sage">
         {icon}
       </div>
       <h3 className="mt-4 font-display text-base font-700 text-zinc-100">{title}</h3>
@@ -334,11 +335,11 @@ function AnywherePromo() {
         Jump in from any device. No downloads. No friction. Just pure pool.
       </p>
 
-      {/* top-down table photo — full table, natural 3:2 ratio (no crop) */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-ink-line/80 bg-black shadow-2xl ring-1 ring-sage/10">
+      {/* the actual in-game table photo — what you play on */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-ink-line/80 bg-black shadow-2xl ring-1 ring-sage/10 transition hover:ring-sage/25">
         <img
-          src="/anywhere-table.jpg"
-          alt="A racked pool table seen from above"
+          src="/table.jpg"
+          alt="The tournament table you play on, seen from above"
           className="block h-auto w-full"
         />
       </div>
