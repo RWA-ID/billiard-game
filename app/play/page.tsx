@@ -410,7 +410,7 @@ export default function PlayPage() {
             >
               {hotSeat || youWon ? '🏆' : '🎱'}
             </span>
-            <p className="mt-4 font-serif text-3xl font-700 text-cream">
+            <p className="mt-4 font-serif text-3xl text-cream">
               {hotSeat
                 ? `Player ${(match!.turn.winner ?? 0) + 1} wins`
                 : youWon

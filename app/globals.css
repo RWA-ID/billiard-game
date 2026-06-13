@@ -4,13 +4,13 @@
 
 :root {
   --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-body: 'Hanken Grotesk', system-ui, sans-serif;
+  --font-serif: 'Libre Caslon Display', Georgia, serif;
 }
 
 html,
 body {
-  background: #0a0f0d;
+  background: #08120e;
   color: #d8e0da;
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;

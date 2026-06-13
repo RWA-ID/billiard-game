@@ -8,9 +8,9 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          DEFAULT: '#0a0f0d', // page background
+          DEFAULT: '#08120e', // page background
           soft: '#0d1411',
-          card: '#111a15', // raised cards
+          card: '#0a1610', // raised cards / panels
           line: '#1d2a23', // hairline borders
         },
         felt: {
@@ -33,9 +33,17 @@ const config: Config = {
         cream: '#f4efe4', // serif headline ink
       },
       fontFamily: {
-        serif: ['var(--font-serif)', 'Playfair Display', 'Georgia', 'serif'],
+        serif: ['var(--font-serif)', 'Libre Caslon Display', 'Georgia', 'serif'],
         display: ['var(--font-display)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         body: ['var(--font-body)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
+      // The codebase styles weight via numeric utilities (font-500 … font-700);
+      // register the scale so they emit real font-weight rules.
+      fontWeight: {
+        '400': '400',
+        '500': '500',
+        '600': '600',
+        '700': '700',
       },
       boxShadow: {
         sage: '0 0 30px rgba(139, 195, 148, 0.25)',

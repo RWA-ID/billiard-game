@@ -94,7 +94,7 @@ export default function ProfilePage() {
       <main className="min-h-screen">
         <WalletBar />
         <div className="mx-auto grid max-w-3xl place-items-center px-5 py-24 text-center">
-          <h1 className="font-serif text-3xl font-700 text-cream">Your profile</h1>
+          <h1 className="font-serif text-3xl text-cream">Your profile</h1>
           <p className="mt-2 text-sm text-zinc-400">Connect a wallet to see your stats and chat with players.</p>
           <div className="mt-6">
             <ConnectWallet />
@@ -116,7 +116,7 @@ export default function ProfilePage() {
               <>
                 <Avatar address={profile.address} avatar={profile.avatar} size={64} />
                 <div className="min-w-0">
-                  <h1 className="truncate font-serif text-2xl font-700 text-cream">
+                  <h1 className="truncate font-serif text-2xl text-cream">
                     {profile.ensName ?? truncate(profile.address)}
                   </h1>
                   <p className="font-mono text-xs text-zinc-500">{profile.address}</p>

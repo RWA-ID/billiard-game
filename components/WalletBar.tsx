@@ -21,8 +21,8 @@ export function WalletBar() {
               8
             </span>
           </span>
-          <span className="font-serif text-lg font-700 tracking-tight text-cream">
-            billiard<span className="text-sage-bright">.eth</span>
+          <span className="font-serif text-lg tracking-wide text-cream">
+            billiard<span className="text-brass">.eth</span>
           </span>
         </Link>
 

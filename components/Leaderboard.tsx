@@ -15,6 +15,10 @@ type Row = {
 
 const RANK_COLORS = ['text-brass-light', 'text-zinc-300', 'text-[#cd7f32]'];
 
+// Medal colors for the head-table preview: gold / silver / bronze, then muted.
+const MEDAL = ['#d9a441', '#c9cdd2', '#b87333'];
+const medal = (i: number) => MEDAL[i] ?? '#7d887f';
+
 /**
  * Leaderboard from the Worker. `preview` = compact top-5 for the landing page;
  * `full` = the /stats table. Guests rank normally by address.
@@ -57,36 +61,42 @@ export function Leaderboard({ variant = 'full' }: { variant?: 'full' | 'preview'
 
   if (preview) {
     return (
-      <ul>
-        <li className="flex items-center justify-between px-1 pb-2 text-[11px] uppercase tracking-wide text-zinc-600">
+      <div>
+        {/* Column header */}
+        <div className="grid grid-cols-[32px_1fr_auto_auto] gap-3.5 border-b border-ink-line/70 pb-3 font-display text-[11px] uppercase tracking-[0.16em] text-[#7d887f]">
+          <span>#</span>
           <span>Player</span>
-          <span className="flex gap-8">
-            <span className="w-16 text-right">Wins</span>
-            <span className="w-10 text-right">Win %</span>
-          </span>
-        </li>
+          <span className="text-right">W–L</span>
+          <span className="text-right">Win%</span>
+        </div>
         {data.map((r, i) => {
           const total = r.wins + r.losses;
           const pct = total ? Math.round((r.wins / total) * 100) : 0;
           return (
-            <li
+            <div
               key={r.address}
-              className="flex items-center justify-between border-t border-ink-line/40 py-2.5"
+              className="grid grid-cols-[32px_1fr_auto_auto] items-center gap-3.5 border-b border-ink-line/50 py-3 last:border-0"
             >
-              <div className="flex min-w-0 items-center gap-3">
-                <span className={`w-4 text-sm font-700 ${RANK_COLORS[i] ?? 'text-zinc-600'}`}>
-                  {i + 1}
-                </span>
-                <PlayerIdentity address={r.address} ensName={r.ensName} avatar={r.avatar} size={30} />
-              </div>
-              <span className="flex items-center gap-8">
-                <span className="w-16 text-right text-sm text-zinc-200">{r.wins.toLocaleString()}</span>
-                <span className="w-10 text-right text-sm text-sage-bright">{pct}%</span>
+              <span className="font-serif text-lg leading-none" style={{ color: medal(i) }}>
+                {i + 1}
               </span>
-            </li>
+              <PlayerIdentity
+                address={r.address}
+                ensName={r.ensName}
+                avatar={r.avatar}
+                size={30}
+                nameClassName="font-display text-[14.5px] font-500 text-[#e3e8e3]"
+              />
+              <span className="text-right font-display text-[13.5px] text-[#9aa69d]">
+                {r.wins}–{r.losses}
+              </span>
+              <span className="text-right font-display text-[13.5px] font-600 text-brass-light">
+                {pct}%
+              </span>
+            </div>
           );
         })}
-      </ul>
+      </div>
     );
   }
 
