@@ -42,9 +42,14 @@ const PLAY = { x: 106, y: 99, w: 1273, h: 638 } as const;
 const ASPECT = IMG_W / IMG_H;
 
 const STRIDE = 2; // sim steps per recorded frame
-const FRAME_SKIP = 2; // recorded frames advanced per rAF tick
 const STRIKE_MS = 95; // cue stick strike animation
 const SINK_MS = 340; // ball-into-pocket animation
+// Playback is driven by WALL-CLOCK time (not frames-per-tick) so it looks the
+// same on a 60Hz monitor, a 120Hz phone, or a momentarily-throttled rAF — the
+// old per-tick advance was the "slow-motion / laggy" feel. PLAYBACK_RATE is how
+// fast sim-time runs vs. real-time; each recorded frame is STRIDE/120 s of sim.
+const PLAYBACK_RATE = 1.9;
+const MS_PER_FRAME = ((STRIDE / 120) * 1000) / PLAYBACK_RATE;
 
 // Where each pocket HOLE visually sits (table units, matching physics.POCKETS
 // order) — the photo's side pockets are recessed into the rail.
@@ -72,6 +77,7 @@ type Playback = {
   events: SimEvent[];
   i: number;
   ev: number;
+  t0: number; // perf.now() when playback began (set when the strike lands)
   mode: 'local' | 'remote';
   input: ShotInput;
 };
@@ -162,7 +168,7 @@ export function PoolCanvas({
       t0: performance.now(),
       angle: input.angle,
       power: input.power,
-      playback: { frames, events: res.events, i: 0, ev: 0, mode, input },
+      playback: { frames, events: res.events, i: 0, ev: 0, t0: 0, mode, input },
     };
   }
 
@@ -232,25 +238,31 @@ export function PoolCanvas({
         if (t >= 1) {
           strikeRef.current = null;
           sfxStrike(st.power);
+          st.playback.t0 = now;
           playbackRef.current = st.playback;
         }
       }
 
-      // Playback phase: step through recorded sim frames.
+      // Playback phase: advance through recorded sim frames by WALL-CLOCK time,
+      // so the shot plays at the same speed regardless of display refresh rate
+      // or rAF throttling (this is what fixes the "slow-motion / lag" feel).
       const pb = playbackRef.current;
       if (pb) {
         const prev = ballsRef.current;
-        const idx = Math.min(pb.i, pb.frames.length - 1);
+        const target = Math.floor((now - pb.t0) / MS_PER_FRAME);
+        const idx = Math.max(0, Math.min(target, pb.frames.length - 1));
         ballsRef.current = pb.frames[idx];
+        pb.i = idx;
 
-        // Sounds for every sim event up to the current step.
+        // Sounds for every sim event up to the current step (catches skipped
+        // frames too, since it drains all events with step <= now).
         const stepNow = idx * STRIDE;
         while (pb.ev < pb.events.length && (pb.events[pb.ev].step ?? 0) <= stepNow) {
           playEvent(pb.events[pb.ev]);
           pb.ev++;
         }
 
-        // Newly potted balls get a sink animation toward the visual hole.
+        // Newly potted balls (vs. the previously drawn frame) get a sink anim.
         for (const b of ballsRef.current) {
           if (!b.potted) continue;
           const was = prev.find((p) => p.id === b.id);
@@ -259,14 +271,12 @@ export function PoolCanvas({
           }
         }
 
-        pb.i += FRAME_SKIP;
-        if (pb.i >= pb.frames.length) {
-          // Catch pots that land between the last played frame and the rest
-          // frame, so they still get a sink animation.
+        if (target >= pb.frames.length - 1) {
+          // Rest frame reached: finalize, draining any remaining events/sinks.
           const last = pb.frames[pb.frames.length - 1];
           for (const b of last) {
             if (!b.potted) continue;
-            const was = ballsRef.current.find((p) => p.id === b.id);
+            const was = prev.find((p) => p.id === b.id);
             if (was && !was.potted) {
               sinksRef.current.push({ id: b.id, x: was.x, y: was.y, pocket: b.pocket, t0: now });
             }

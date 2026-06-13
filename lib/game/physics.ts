@@ -24,7 +24,7 @@ export const PHYS = {
   friction: 0.55, // rolling friction (per second, exponential-ish via dt)
   cushionRestitution: 0.92,
   ballRestitution: 0.96,
-  minSpeed: 0.05, // below this a ball is snapped to rest
+  minSpeed: 0.08, // below this a ball is snapped to rest (trims the dead creep tail)
   maxSteps: 4000, // hard cap so a shot always terminates
   maxShotSpeed: 90, // table units / second at power = 1
   spinTransfer: 12, // how strongly english curves the cue post-contact
@@ -166,6 +166,12 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
 
   let firstContact: number | null = null;
   let cushionAfterContact = false;
+  // First-contact bookkeeping: when the cue touches several balls in the SAME
+  // step (clusters / the rack), credit the CLOSEST one so the foul check agrees
+  // with the visible ghost-ball aim line (which also picks the nearest ball).
+  let firstContactDist = Infinity;
+  let firstContactStep = -1;
+  let firstContactEvtIdx = -1;
 
   if (cue && !cue.potted) {
     const power = Math.max(0, Math.min(1, input.power));
@@ -239,11 +245,22 @@ export function simulate(state: GameState, input: ShotInput, opts?: SimOptions):
             b.vx += imp * nx;
             b.vy += imp * ny;
             events.push({ type: 'collision', a: a.id, b: b.id, step, speed: -velN });
-            // Track first ball the cue contacts.
-            if ((a.id === 0 || b.id === 0) && firstContact === null) {
+            // Track first ball the cue contacts — closest-in-step wins.
+            if (a.id === 0 || b.id === 0) {
               const other = a.id === 0 ? b.id : a.id;
-              firstContact = other;
-              events.push({ type: 'first-contact', ball: other, step });
+              if (firstContact === null) {
+                firstContact = other;
+                firstContactDist = dist;
+                firstContactStep = step;
+                firstContactEvtIdx = events.length;
+                events.push({ type: 'first-contact', ball: other, step });
+              } else if (step === firstContactStep && dist < firstContactDist) {
+                // A nearer ball was actually struck first this same step.
+                firstContact = other;
+                firstContactDist = dist;
+                (events[firstContactEvtIdx] as Extract<SimEvent, { type: 'first-contact' }>).ball =
+                  other;
+              }
             }
           }
         }

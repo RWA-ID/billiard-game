@@ -3,11 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignMessage } from 'wagmi';
+import type { Address } from 'viem';
 import { WalletBar } from '@/components/WalletBar';
 import { PoolCanvas, type RemoteShot } from '@/components/PoolCanvas';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/Avatar';
+import { Spinner } from '@/components/ui/Spinner';
+import { ChatPanel } from '@/components/ChatPanel';
 import { clsx } from '@/components/ui/clsx';
+import { useXmtp } from '@/lib/xmtp/useXmtp';
 import { useIdentity } from '@/lib/wallet/useIdentity';
 import { useRoom } from '@/lib/net/useRoom';
 import { applyShot, newMatch, placeCueBall, type Match } from '@/lib/game/state';
@@ -47,6 +51,11 @@ export default function PlayPage() {
     (msg) => handlerRef.current(msg),
   );
   const [calledPocket, setCalledPocket] = useState<number | null>(null);
+
+  // In-match XMTP chat with the opponent (multiplayer only).
+  const { enable, ready: chatReady, connecting: chatConnecting, error: chatError, openConversation } =
+    useXmtp();
+  const [showChat, setShowChat] = useState(false);
 
   // Sound preference + unlock on the first gesture anywhere on the page, so
   // the waiting (non-shooting) player hears the opponent's break too.
@@ -324,6 +333,61 @@ export default function PlayPage() {
           </p>
         )}
 
+        {/* In-match chat with the opponent (multiplayer only). */}
+        {!hotSeat && ctx && (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowChat((v) => !v);
+                if (!chatReady && !chatConnecting) void enable();
+              }}
+              className="flex w-full items-center justify-between rounded-2xl border border-ink-line bg-ink-card/60 px-4 py-3 text-left text-sm font-600 text-zinc-200 transition hover:border-sage/40"
+            >
+              <span className="flex items-center gap-2">
+                <ChatIcon />
+                Chat with {opponentName || 'opponent'}
+              </span>
+              <span className="text-xs text-zinc-500">{showChat ? 'Hide' : 'Open'}</span>
+            </button>
+
+            {showChat && (
+              <div className="mt-3">
+                {chatReady ? (
+                  <ChatPanel
+                    peer={{
+                      address: ctx.opponent.address as Address,
+                      display: opponentName || 'Opponent',
+                      avatar: ctx.opponent.avatar ?? null,
+                    }}
+                    openConversation={openConversation}
+                  />
+                ) : (
+                  <div className="rounded-2xl border border-ink-line bg-ink-card/60 p-6 text-center">
+                    <p className="text-sm text-zinc-400">
+                      Messages are end-to-end encrypted over{' '}
+                      <span className="text-sage-bright">XMTP</span>. Enable it once with a
+                      signature to chat during the match.
+                    </p>
+                    <div className="mt-4 flex justify-center">
+                      <Button onClick={() => void enable()} disabled={chatConnecting}>
+                        {chatConnecting ? (
+                          <>
+                            <Spinner size={14} /> Enabling…
+                          </>
+                        ) : (
+                          'Enable messaging'
+                        )}
+                      </Button>
+                    </div>
+                    {chatError && <p className="mt-2 text-xs text-red-400">{chatError}</p>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {opponentLeft && !over && (
           <div className="overlay-in mt-6 grid place-items-center rounded-2xl border border-brass/30 bg-ink-card/80 p-8 text-center shadow-brass backdrop-blur">
             <p className="font-display text-2xl font-700 text-zinc-50">Opponent left</p>
@@ -459,6 +523,19 @@ function BallDot({ id }: { id: number }) {
       }}
       title={`${id}`}
     />
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 5h16v10H8l-4 4V5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

@@ -39,7 +39,14 @@ export function unlockAudio() {
     master = ctx.createGain();
     muted = isMuted();
     master.gain.value = muted ? 0 : 1;
-    master.connect(ctx.destination);
+    // Compress the bus so the break's many simultaneous clacks don't clip into
+    // a harsh buzz — keeps a soft safety shot soft and a full rack punchy.
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.002;
+    comp.release.value = 0.12;
+    master.connect(comp).connect(ctx.destination);
     // 1s of white noise reused by every percussive effect.
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -83,13 +90,22 @@ function tone(at: number, peak: number, decay: number, f0: number, f1 = f0, type
 const now = () => ctx?.currentTime ?? 0;
 const ready = () => !!ctx && !muted;
 
-/** Phenolic ball-on-ball click. `v` 0..1 impact strength. */
+/**
+ * Phenolic ball-on-ball clack. `v` 0..1 impact strength. A real pool-ball
+ * collision is a short, hard, bright transient with a quick pitched "tock"
+ * body — so: a snappy band-limited noise crack, a fast pitch-dropping body
+ * tone, and a tiny high partial for the glassy edge. All decays are short.
+ */
 export function sfxClick(v: number) {
   if (!ready()) return;
   const t = now();
-  const s = Math.min(1, Math.max(0.12, v));
-  noise(t, 0.55 * s, 0.035, 2400 + 1800 * s, 1.2, 'highpass');
-  tone(t, 0.30 * s, 0.05, 2100 + 700 * s, 1500, 'triangle');
+  const s = Math.min(1, Math.max(0.15, v));
+  // Hard transient crack (the "clack").
+  noise(t, 0.7 * s, 0.022, 2600 + 1400 * s, 0.9, 'bandpass');
+  // Pitched body that drops fast — the wooden "tock" under the crack.
+  tone(t, 0.4 * s, 0.04, 1500 + 900 * s, 640, 'triangle');
+  // Glassy high edge for the phenolic sheen.
+  tone(t, 0.16 * s, 0.025, 3400 + 1500 * s, 2200, 'sine');
 }
 
 /** Rubber cushion thud. */

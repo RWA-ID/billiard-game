@@ -81,7 +81,10 @@ export function evaluateShot(
       const legalFirst = clearedMyGroup ? result.firstContact === 8 : fcGroup === myGroup;
       if (!legalFirst) {
         foul = true;
-        foulReason = 'wrong ball first';
+        const hit = result.firstContact === 8 ? 'the 8-ball' : fcGroup ?? 'another ball';
+        foulReason = clearedMyGroup
+          ? `must hit the 8-ball first (hit ${hit})`
+          : `must hit ${myGroup} first (hit ${hit})`;
       }
     }
     // Foul: no rail and no pot after contact.
