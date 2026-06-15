@@ -30,20 +30,39 @@ export type Conversation = {
 
 // The SDK types are heavy/generic; we keep the client as unknown and narrow at
 // the call sites to avoid leaking wasm types into the static bundle's surface.
+type XmtpStream = { end?: () => void; return?: () => void };
 type XmtpClient = {
   inboxId: string;
   canMessage: (ids: { identifier: string; identifierKind: number }[]) => Promise<Map<string, boolean>>;
   conversations: {
+    // Pull the conversation list (welcomes/new DMs) from the network.
+    sync: () => Promise<void>;
+    // Pull every conversation AND its messages from the network.
+    syncAll: () => Promise<void>;
     createDmWithIdentifier: (id: { identifier: string; identifierKind: number }) => Promise<XmtpDm>;
+    getConversationById: (id: string) => Promise<XmtpConversation | undefined>;
+    getDmByInboxId: (inboxId: string) => Promise<XmtpDm | undefined>;
+    // Client-level stream: delivers messages from ANY conversation, including
+    // duplicate / freshly-joined DM groups a per-DM stream would miss.
+    streamAllMessages: (opts: { onValue?: (m: XmtpMessage) => void }) => Promise<XmtpStream>;
   };
 };
-type XmtpDm = {
+type XmtpConversation = {
+  id: string;
   messages: () => Promise<XmtpMessage[]>;
   sendText: (text: string) => Promise<string>;
-  sync?: () => Promise<void>;
-  stream: (opts: { onValue?: (m: XmtpMessage) => void }) => Promise<{ end?: () => void; return?: () => void }>;
 };
-type XmtpMessage = { id: string; content: unknown; senderInboxId: string; sentAtNs: bigint };
+type XmtpDm = XmtpConversation & {
+  peerInboxId: () => Promise<string>;
+  duplicateDms: () => Promise<XmtpDm[]>;
+};
+type XmtpMessage = {
+  id: string;
+  content: unknown;
+  senderInboxId: string;
+  sentAtNs: bigint;
+  conversationId: string;
+};
 
 // Building the XMTP client occasionally stalls before the wallet ever shows the
 // signature prompt (a lost WalletConnect request, an OPFS/IndexedDB lock held by
@@ -200,40 +219,78 @@ export function useXmtp() {
         throw new Error('This player has not enabled XMTP messaging yet.');
       }
 
+      // Pull the conversation list from the network FIRST. If the peer already
+      // started a DM with us, this receives their welcome so the DM we resolve
+      // below joins THEIR group instead of spawning a separate (duplicate) DM
+      // that never sees their messages — the root cause of "messages never
+      // arrive on the other browser".
+      await client.conversations.sync().catch(() => {});
+
       const dm = await client.conversations.createDmWithIdentifier(identifier);
+      const peerInbox = await dm.peerInboxId().catch(() => '');
+
+      // Even after syncing, XMTP can end up with more than one DM group for the
+      // same pair (both sides create one before the other's welcome arrives).
+      // Messages get split across these groups, so we track EVERY backing group
+      // id and read/stream from all of them ("DM stitching").
+      const dmIds = new Set<string>([dm.id]);
+      const refreshDmIds = async () => {
+        try {
+          if (peerInbox) {
+            const canonical = await client.conversations.getDmByInboxId(peerInbox);
+            if (canonical) dmIds.add(canonical.id);
+          }
+          for (const d of await dm.duplicateDms().catch(() => [])) dmIds.add(d.id);
+        } catch {
+          /* keep whatever ids we already have */
+        }
+      };
+
       const toChat = (m: XmtpMessage): ChatMessage | null =>
         typeof m.content === 'string'
           ? { id: m.id, text: m.content, sentAtNs: m.sentAtNs, mine: m.senderInboxId === sharedInboxId }
           : null;
 
-      for (const m of await dm.messages()) {
-        const c = toChat(m);
-        if (c) onMessage(c);
-      }
+      const drain = async () => {
+        await refreshDmIds();
+        for (const id of dmIds) {
+          const conv = id === dm.id ? dm : await client.conversations.getConversationById(id);
+          if (!conv) continue;
+          for (const m of await conv.messages()) {
+            const c = toChat(m);
+            if (c) onMessage(c);
+          }
+        }
+      };
 
-      const stream = await dm.stream({
+      // Sync history across all of this peer's DM groups, then replay it.
+      await client.conversations.syncAll().catch(() => {});
+      await drain();
+
+      // Live stream across ALL conversations: unlike a per-DM stream, this also
+      // delivers messages landing in a duplicate / newly-joined DM group. Filter
+      // to this peer's group ids; anything that arrives before its id is known is
+      // caught by the periodic drain below (deduped by id upstream).
+      const stream = await client.conversations.streamAllMessages({
         onValue: (m) => {
+          if (!dmIds.has(m.conversationId)) return;
           const c = toChat(m);
           if (c) onMessage(c);
         },
       });
 
       // Reliability fallback: browser-SDK live streams can silently miss a
-      // message (especially the first one a peer ever sends). Sync the DM from
-      // the network and replay its messages every few seconds; everything is
-      // deduped by id upstream, so this only surfaces what the stream dropped.
-      // Without this, a sent message can show on the sender but not the receiver.
+      // message (especially the first a peer ever sends, or one in a freshly
+      // stitched DM). Periodically pull from the network and replay; everything
+      // is deduped by id upstream, so this only surfaces what the stream dropped.
       let stopped = false;
       void (async () => {
         while (!stopped) {
           await new Promise((r) => setTimeout(r, 2500));
           if (stopped) break;
           try {
-            await dm.sync?.();
-            for (const m of await dm.messages()) {
-              const c = toChat(m);
-              if (c) onMessage(c);
-            }
+            await client.conversations.sync().catch(() => {});
+            await drain();
           } catch {
             /* transient network/sync error — try again next tick */
           }
